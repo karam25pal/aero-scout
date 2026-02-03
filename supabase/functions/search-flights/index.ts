@@ -39,16 +39,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Searching flights:', { originSkyId, destinationSkyId, date, returnDate });
+    console.log('Searching flights with params:', { 
+      originSkyId, 
+      destinationSkyId, 
+      originEntityId, 
+      destinationEntityId, 
+      date, 
+      returnDate,
+      cabinClass,
+      adults
+    });
 
     // Build the URL with all parameters
-    let url = `https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights?originSkyId=${originSkyId}&destinationSkyId=${destinationSkyId}&originEntityId=${originEntityId}&destinationEntityId=${destinationEntityId}&date=${date}&cabinClass=${cabinClass}&adults=${adults}&childrens=${children}&infants=${infants}&sortBy=best&currency=USD&market=en-US&countryCode=US`;
+    const url = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights');
+    url.searchParams.set('originSkyId', originSkyId);
+    url.searchParams.set('destinationSkyId', destinationSkyId);
+    url.searchParams.set('originEntityId', originEntityId);
+    url.searchParams.set('destinationEntityId', destinationEntityId);
+    url.searchParams.set('date', date);
+    url.searchParams.set('cabinClass', cabinClass);
+    url.searchParams.set('adults', String(adults));
+    url.searchParams.set('childrens', String(children));
+    url.searchParams.set('infants', String(infants));
+    url.searchParams.set('sortBy', 'best');
+    url.searchParams.set('currency', 'USD');
+    url.searchParams.set('market', 'en-US');
+    url.searchParams.set('countryCode', 'US');
 
     if (returnDate) {
-      url += `&returnDate=${returnDate}`;
+      url.searchParams.set('returnDate', returnDate);
     }
 
-    const response = await fetch(url, {
+    console.log('API URL:', url.toString());
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
@@ -57,9 +81,20 @@ Deno.serve(async (req) => {
     });
 
     const data = await response.json();
+    
+    // Log raw response for debugging
+    console.log('API Response status:', response.status);
+    console.log('API Response data structure:', JSON.stringify({
+      hasData: !!data.data,
+      hasItineraries: !!data.data?.itineraries,
+      itinerariesCount: data.data?.itineraries?.length || 0,
+      context: data.data?.context || null,
+      status: data.status,
+      message: data.message
+    }));
 
     if (!response.ok) {
-      console.error('Sky Scrapper API error:', data);
+      console.error('Sky Scrapper API error:', JSON.stringify(data));
       return new Response(
         JSON.stringify({ success: false, error: data.message || 'Failed to search flights', data: [] }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
