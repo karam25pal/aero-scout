@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!data.status || data.message) {
+    if (!data.status) {
       console.error('Booking.com API returned error:', data.message);
       return new Response(
         JSON.stringify({ success: false, error: data.message || 'API error', data: [] }),
