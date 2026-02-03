@@ -41,6 +41,9 @@ Deno.serve(async (req) => {
     );
 
     const data = await response.json();
+    
+    // Log raw response for debugging
+    console.log('Airport search response:', JSON.stringify(data).substring(0, 500));
 
     if (!response.ok) {
       console.error('Sky Scrapper API error:', data);
@@ -50,17 +53,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Transform the response to a cleaner format
-    const airports = (data.data || []).map((item: any) => ({
-      entityId: item.entityId || item.navigation?.entityId || '',
-      skyId: item.skyId || item.navigation?.relevantFlightParams?.skyId || '',
-      name: item.presentation?.suggestionTitle || item.name || '',
-      city: item.navigation?.relevantFlightParams?.skyId || item.presentation?.subtitle?.split(',')[0] || '',
-      country: item.presentation?.subtitle?.split(',').pop()?.trim() || '',
-      iata: item.skyId || item.iataCode || '',
-    })).filter((airport: any) => airport.entityId && airport.skyId);
+    // Transform the response - extract the correct fields from the API response
+    const airports = (data.data || [])
+      .filter((item: any) => item.navigation?.entityType === 'AIRPORT')
+      .map((item: any) => {
+        const presentation = item.presentation || {};
+        const navigation = item.navigation || {};
+        const flightParams = navigation.relevantFlightParams || {};
+        
+        return {
+          entityId: navigation.entityId || item.entityId || '',
+          skyId: flightParams.skyId || item.skyId || '',
+          name: presentation.suggestionTitle || item.name || '',
+          city: presentation.subtitle?.split(',')[0]?.trim() || flightParams.skyId || '',
+          country: presentation.subtitle?.split(',').pop()?.trim() || '',
+          iata: flightParams.skyId || item.skyId || '',
+        };
+      })
+      .filter((airport: any) => airport.entityId && airport.skyId);
 
-    console.log(`Found ${airports.length} airports`);
+    console.log(`Found ${airports.length} airports:`, airports.map((a: any) => `${a.iata} (${a.entityId})`).join(', '));
 
     return new Response(
       JSON.stringify({ success: true, data: airports }),
