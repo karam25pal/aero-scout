@@ -49,18 +49,29 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
         body: { query }
       });
 
-      if (error) throw error;
+      // Handle rate limiting gracefully - don't throw, just ignore
+      if (error) {
+        console.warn('Airport search error:', error);
+        return;
+      }
+
+      // Check for API rate limit response
+      if (data?.error === 'Too many requests') {
+        console.warn('Rate limited, please wait a moment');
+        return;
+      }
 
       const airports = data?.data || [];
       if (type === 'origin') {
         setOriginAirports(airports);
-        setShowOriginDropdown(true);
+        setShowOriginDropdown(airports.length > 0);
       } else {
         setDestinationAirports(airports);
-        setShowDestinationDropdown(true);
+        setShowDestinationDropdown(airports.length > 0);
       }
     } catch (error) {
-      console.error('Error searching airports:', error);
+      // Silently handle errors to prevent UI crashes
+      console.warn('Error searching airports:', error);
     } finally {
       if (type === 'origin') setIsSearchingOrigin(false);
       else setIsSearchingDestination(false);
@@ -69,19 +80,19 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (originQuery && !selectedOrigin) {
+      if (originQuery && originQuery.length >= 2 && !selectedOrigin) {
         searchAirports(originQuery, 'origin');
       }
-    }, 300);
+    }, 500); // Increased debounce to avoid rate limiting
     return () => clearTimeout(timer);
   }, [originQuery]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (destinationQuery && !selectedDestination) {
+      if (destinationQuery && destinationQuery.length >= 2 && !selectedDestination) {
         searchAirports(destinationQuery, 'destination');
       }
-    }, 300);
+    }, 500); // Increased debounce to avoid rate limiting
     return () => clearTimeout(timer);
   }, [destinationQuery]);
 
