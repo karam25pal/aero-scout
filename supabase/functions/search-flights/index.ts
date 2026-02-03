@@ -17,13 +17,13 @@ Deno.serve(async (req) => {
       destinationEntityId,
       date,
       returnDate,
-      cabinClass = 'economy',
+      cabinClass = 'ECONOMY',
       adults = 1,
       children = 0,
       infants = 0,
     } = body;
 
-    if (!originSkyId || !destinationSkyId || !originEntityId || !destinationEntityId || !date) {
+    if (!originSkyId || !destinationSkyId || !date) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing required parameters', data: [] }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -39,6 +39,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Map cabin class to Booking.com format
+    const cabinClassMap: Record<string, string> = {
+      'economy': 'ECONOMY',
+      'premium_economy': 'PREMIUM_ECONOMY',
+      'business': 'BUSINESS',
+      'first': 'FIRST',
+    };
+    const mappedCabinClass = cabinClassMap[cabinClass.toLowerCase()] || 'ECONOMY';
+
     console.log('Searching flights with params:', { 
       originSkyId, 
       destinationSkyId, 
@@ -46,25 +55,21 @@ Deno.serve(async (req) => {
       destinationEntityId, 
       date, 
       returnDate,
-      cabinClass,
+      cabinClass: mappedCabinClass,
       adults
     });
 
-    // Build the URL with all parameters
-    const url = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights');
-    url.searchParams.set('originSkyId', originSkyId);
-    url.searchParams.set('destinationSkyId', destinationSkyId);
-    url.searchParams.set('originEntityId', originEntityId);
-    url.searchParams.set('destinationEntityId', destinationEntityId);
-    url.searchParams.set('date', date);
-    url.searchParams.set('cabinClass', cabinClass);
+    // Build the URL with all parameters for Booking.com API
+    const url = new URL('https://booking-com15.p.rapidapi.com/api/v1/flights/searchFlights');
+    url.searchParams.set('fromId', `${originSkyId}.AIRPORT`);
+    url.searchParams.set('toId', `${destinationSkyId}.AIRPORT`);
+    url.searchParams.set('departDate', date);
     url.searchParams.set('adults', String(adults));
-    url.searchParams.set('childrens', String(children));
+    url.searchParams.set('children', String(children));
     url.searchParams.set('infants', String(infants));
-    url.searchParams.set('sortBy', 'best');
-    url.searchParams.set('currency', 'USD');
-    url.searchParams.set('market', 'en-US');
-    url.searchParams.set('countryCode', 'US');
+    url.searchParams.set('cabinClass', mappedCabinClass);
+    url.searchParams.set('currency_code', 'USD');
+    url.searchParams.set('sort', 'BEST');
 
     if (returnDate) {
       url.searchParams.set('returnDate', returnDate);
@@ -75,65 +80,77 @@ Deno.serve(async (req) => {
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
+        'x-rapidapi-host': 'booking-com15.p.rapidapi.com',
         'x-rapidapi-key': apiKey,
       },
     });
 
     const data = await response.json();
     
-    // Log raw response for debugging
     console.log('API Response status:', response.status);
-    console.log('API Response data structure:', JSON.stringify({
-      hasData: !!data.data,
-      hasItineraries: !!data.data?.itineraries,
-      itinerariesCount: data.data?.itineraries?.length || 0,
-      context: data.data?.context || null,
-      status: data.status,
-      message: data.message
-    }));
+    console.log('API Response data:', JSON.stringify(data).substring(0, 1000));
 
     if (!response.ok) {
-      console.error('Sky Scrapper API error:', JSON.stringify(data));
+      console.error('Booking.com API error:', JSON.stringify(data));
       return new Response(
         JSON.stringify({ success: false, error: data.message || 'Failed to search flights', data: [] }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Transform the response
-    const itineraries = data.data?.itineraries || [];
-    const flights = itineraries.map((itinerary: any) => ({
-      id: itinerary.id,
-      price: {
-        raw: itinerary.price?.raw || 0,
-        formatted: itinerary.price?.formatted || '$0',
-      },
-      legs: (itinerary.legs || []).map((leg: any) => ({
-        origin: {
-          name: leg.origin?.name || '',
-          displayCode: leg.origin?.displayCode || '',
-          city: leg.origin?.city || '',
+    if (!data.status || data.message) {
+      console.error('Booking.com API returned error:', data.message);
+      return new Response(
+        JSON.stringify({ success: false, error: data.message || 'API error', data: [] }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Transform the response from Booking.com API
+    const flightOffers = data.data?.flightOffers || [];
+    const flights = flightOffers.map((offer: any) => {
+      const segments = offer.segments || [];
+      
+      return {
+        id: offer.token || offer.id || Math.random().toString(36),
+        price: {
+          raw: offer.priceBreakdown?.total?.units || 0,
+          formatted: offer.priceBreakdown?.total?.currencyCode 
+            ? `${offer.priceBreakdown.total.currencyCode} ${offer.priceBreakdown.total.units}`
+            : `$${offer.priceBreakdown?.total?.units || 0}`,
         },
-        destination: {
-          name: leg.destination?.name || '',
-          displayCode: leg.destination?.displayCode || '',
-          city: leg.destination?.city || '',
-        },
-        departure: leg.departure || '',
-        arrival: leg.arrival || '',
-        durationInMinutes: leg.durationInMinutes || 0,
-        carriers: {
-          marketing: (leg.carriers?.marketing || []).map((carrier: any) => ({
-            name: carrier.name || '',
-            logoUrl: carrier.logoUrl || '',
-          })),
-        },
-        stopCount: leg.stopCount || 0,
-      })),
-      isSelfTransfer: itinerary.isSelfTransfer || false,
-      tags: itinerary.tags || [],
-    }));
+        legs: segments.map((segment: any) => {
+          const legs = segment.legs || [];
+          const firstLeg = legs[0] || {};
+          const lastLeg = legs[legs.length - 1] || firstLeg;
+          
+          return {
+            origin: {
+              name: firstLeg.departureAirport?.name || '',
+              displayCode: firstLeg.departureAirport?.code || '',
+              city: firstLeg.departureAirport?.cityName || '',
+            },
+            destination: {
+              name: lastLeg.arrivalAirport?.name || '',
+              displayCode: lastLeg.arrivalAirport?.code || '',
+              city: lastLeg.arrivalAirport?.cityName || '',
+            },
+            departure: firstLeg.departureTime || '',
+            arrival: lastLeg.arrivalTime || '',
+            durationInMinutes: segment.totalTime ? Math.round(segment.totalTime / 60) : 0,
+            carriers: {
+              marketing: legs.map((leg: any) => ({
+                name: leg.carriersData?.[0]?.name || leg.airlineName || '',
+                logoUrl: leg.carriersData?.[0]?.logo || '',
+              })).filter((c: any) => c.name),
+            },
+            stopCount: legs.length - 1,
+          };
+        }),
+        isSelfTransfer: offer.isSelfTransfer || false,
+        tags: offer.tags || [],
+      };
+    });
 
     console.log(`Found ${flights.length} flights`);
 
