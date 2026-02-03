@@ -30,11 +30,11 @@ Deno.serve(async (req) => {
     console.log('Searching airports for:', query);
 
     const response = await fetch(
-      `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(query)}&locale=en-US`,
+      `https://booking-com15.p.rapidapi.com/api/v1/flights/searchDestination?query=${encodeURIComponent(query)}`,
       {
         method: 'GET',
         headers: {
-          'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
+          'x-rapidapi-host': 'booking-com15.p.rapidapi.com',
           'x-rapidapi-key': apiKey,
         },
       }
@@ -42,35 +42,28 @@ Deno.serve(async (req) => {
 
     const data = await response.json();
     
-    // Log raw response for debugging
     console.log('Airport search response:', JSON.stringify(data).substring(0, 500));
 
     if (!response.ok) {
-      console.error('Sky Scrapper API error:', data);
+      console.error('Booking.com API error:', data);
       return new Response(
         JSON.stringify({ success: false, error: data.message || 'Failed to search airports', data: [] }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Transform the response - extract the correct fields from the API response
+    // Transform the response from Booking.com API
     const airports = (data.data || [])
-      .filter((item: any) => item.navigation?.entityType === 'AIRPORT')
-      .map((item: any) => {
-        const presentation = item.presentation || {};
-        const navigation = item.navigation || {};
-        const flightParams = navigation.relevantFlightParams || {};
-        
-        return {
-          entityId: navigation.entityId || item.entityId || '',
-          skyId: flightParams.skyId || item.skyId || '',
-          name: presentation.suggestionTitle || item.name || '',
-          city: presentation.subtitle?.split(',')[0]?.trim() || flightParams.skyId || '',
-          country: presentation.subtitle?.split(',').pop()?.trim() || '',
-          iata: flightParams.skyId || item.skyId || '',
-        };
-      })
-      .filter((airport: any) => airport.entityId && airport.skyId);
+      .filter((item: any) => item.type === 'AIRPORT')
+      .map((item: any) => ({
+        entityId: item.id || '',
+        skyId: item.code || item.id || '',
+        name: item.name || '',
+        city: item.cityName || item.city || '',
+        country: item.countryName || item.country || '',
+        iata: item.code || '',
+      }))
+      .filter((airport: any) => airport.entityId && airport.iata);
 
     console.log(`Found ${airports.length} airports:`, airports.map((a: any) => `${a.iata} (${a.entityId})`).join(', '));
 
