@@ -1,13 +1,25 @@
 import { FlightResult } from '@/types/flight';
 import { FlightCard } from './FlightCard';
 import { Plane } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface FlightResultsProps {
   flights: FlightResult[];
   isLoading: boolean;
+  totalCount?: number;
+  hasNextPage?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export const FlightResults = ({ flights, isLoading }: FlightResultsProps) => {
+export const FlightResults = ({
+  flights,
+  isLoading,
+  totalCount,
+  hasNextPage,
+  isLoadingMore,
+  onLoadMore,
+}: FlightResultsProps) => {
   if (isLoading) {
     return (
       <div className="w-full max-w-5xl mx-auto mt-8">
@@ -34,15 +46,35 @@ export const FlightResults = ({ flights, isLoading }: FlightResultsProps) => {
   return (
     <div className="w-full max-w-5xl mx-auto mt-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-foreground">
-          {flights.length} flight{flights.length !== 1 ? 's' : ''} found
-        </h2>
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">
+            {flights.length} flight{flights.length !== 1 ? 's' : ''} found
+          </h2>
+          {typeof totalCount === 'number' && totalCount > flights.length && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing {flights.length} of {totalCount}
+            </p>
+          )}
+        </div>
       </div>
       <div className="space-y-4">
         {flights.map((flight) => (
           <FlightCard key={flight.id} flight={flight} />
         ))}
       </div>
+
+      {hasNextPage && onLoadMore && (
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="outline"
+            onClick={onLoadMore}
+            disabled={!!isLoadingMore}
+            className="min-w-40"
+          >
+            {isLoadingMore ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
