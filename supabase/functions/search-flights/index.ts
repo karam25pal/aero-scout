@@ -139,17 +139,42 @@ Deno.serve(async (req) => {
       // ignore
     }
 
-    const offerCandidates: { key: string; offers: any[] }[] = [];
-    const looksLikeOffer = (obj: any) =>
+    // Combine all flight-like arrays into a single merged list (no duplicate ids).
+    const looksLikeOffer = (obj: any): boolean =>
       !!obj && typeof obj === 'object' && (Array.isArray(obj.segments) || Array.isArray(obj.offer?.segments));
 
+    const seenIds = new Set<string>();
+    const mergedOffers: any[] = [];
+
+    const addOffer = (item: any) => {
+      const offerData = item?.offer ?? item;
+      const id: string = String(offerData?.token || offerData?.id || item?.id || '');
+      if (id && seenIds.has(id)) return;
+      if (id) seenIds.add(id);
+      mergedOffers.push(item);
+    };
+
+    // First, add all items from flightOffers (typically the main list).
+    for (const item of flightOffers) {
+      addOffer(item);
+    }
+
+    // Then scan for additional arrays that contain offer-like objects.
     for (const [key, value] of Object.entries(dataRoot)) {
+      if (key === 'flightOffers') continue; // already processed
       if (!Array.isArray(value) || value.length === 0) continue;
       const first = value[0] as any;
       if (looksLikeOffer(first)) {
-        offerCandidates.push({ key, offers: value as any[] });
+        console.log(`Adding offers from \"${key}\" (${value.length} items)`);
+        for (const item of value as any[]) {
+          addOffer(item);
+        }
       }
     }
+
+    // Replace flightOffers with the merged list.
+    flightOffers = mergedOffers;
+    console.log(`Merged offers count: ${flightOffers.length}`);
 
     // Log useful structure hints for debugging pagination/partial-result issues
     try {
@@ -170,19 +195,6 @@ Deno.serve(async (req) => {
       }
     } catch (_e) {
       // ignore logging failures
-    }
-
-    if (offerCandidates.length > 0) {
-      offerCandidates.sort((a, b) => b.offers.length - a.offers.length);
-      const best = offerCandidates[0];
-      if (best.offers.length > flightOffers.length) {
-        console.log(`Using offers array \"${best.key}\" with ${best.offers.length} items (flightOffers had ${flightOffers.length})`);
-        flightOffers = best.offers;
-      } else {
-        console.log(`Using flightOffers with ${flightOffers.length} items (largest candidate: ${best.key}=${best.offers.length})`);
-      }
-    } else {
-      console.log('No offer-like arrays found in data root. Keys:', Object.keys(dataRoot));
     }
 
     const flights = flightOffers.map((offer: any) => {
