@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
     url.searchParams.set('cabinClass', mappedCabinClass);
     url.searchParams.set('currency_code', 'GBP');
     url.searchParams.set('sort', 'BEST');
+    url.searchParams.set('limit', '100');
 
     if (returnDate) {
       url.searchParams.set('returnDate', returnDate);
