@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     url.searchParams.set('children', String(children));
     url.searchParams.set('infants', String(infants));
     url.searchParams.set('cabinClass', mappedCabinClass);
-    url.searchParams.set('currency_code', 'USD');
+    url.searchParams.set('currency_code', 'GBP');
     url.searchParams.set('sort', 'BEST');
 
     if (returnDate) {
