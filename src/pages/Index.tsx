@@ -7,16 +7,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Plane } from 'lucide-react';
 
+type FlightSearchMeta = {
+  totalCount?: number;
+  hasNextPage?: boolean;
+  next?: {
+    cursor?: string;
+    offset?: number;
+    page?: number;
+  };
+};
+
 const Index = () => {
   const [flights, setFlights] = useState<FlightResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [lastParams, setLastParams] = useState<SearchParams | null>(null);
+  const [meta, setMeta] = useState<FlightSearchMeta | null>(null);
   const { toast } = useToast();
 
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
     setHasSearched(true);
     setFlights([]);
+    setLastParams(params);
+    setMeta(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('search-flights', {
@@ -25,9 +40,10 @@ const Index = () => {
 
       if (error) throw error;
 
-      if (data?.success) {
-        setFlights(data.data || []);
-        if (data.data?.length === 0) {
+       if (data?.success) {
+         setFlights(data.data || []);
+         setMeta(data.meta || null);
+         if (data.data?.length === 0) {
           toast({
             title: 'No flights found',
             description: 'Try adjusting your search criteria',
@@ -45,6 +61,49 @@ const Index = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!lastParams) return;
+
+    const next = meta?.next;
+    if (!meta?.hasNextPage || !next) return;
+
+    setIsLoadingMore(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('search-flights', {
+        body: {
+          ...lastParams,
+          cursor: next.cursor,
+          offset: next.offset,
+          page: next.page,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to load more flights');
+
+      const more: FlightResult[] = data.data || [];
+      setFlights((prev) => {
+        if (more.length === 0) return prev;
+        const seen = new Set(prev.map((f) => f.id));
+        const merged = [...prev];
+        for (const f of more) {
+          if (!seen.has(f.id)) merged.push(f);
+        }
+        return merged;
+      });
+      setMeta(data.meta || null);
+    } catch (error) {
+      console.error('Error loading more flights:', error);
+      toast({
+        title: 'Could not load more',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -82,7 +141,14 @@ const Index = () => {
 
         {/* Results */}
         <div className="container mx-auto px-4 pb-16">
-          <FlightResults flights={flights} isLoading={isLoading} />
+          <FlightResults
+            flights={flights}
+            isLoading={isLoading}
+            totalCount={meta?.totalCount}
+            hasNextPage={meta?.hasNextPage}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={handleLoadMore}
+          />
 
           {/* Empty State */}
           {!isLoading && hasSearched && flights.length === 0 && (

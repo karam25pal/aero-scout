@@ -17,6 +17,10 @@ Deno.serve(async (req) => {
       destinationEntityId,
       date,
       returnDate,
+      // Optional pagination params (Booking.com/RapidAPI may support one of these)
+      cursor,
+      offset,
+      page,
       cabinClass = 'ECONOMY',
       adults = 1,
       children = 0,
@@ -61,8 +65,12 @@ Deno.serve(async (req) => {
 
     // Build the URL with all parameters for Booking.com API
     const url = new URL('https://booking-com15.p.rapidapi.com/api/v1/flights/searchFlights');
-    url.searchParams.set('fromId', `${originSkyId}.AIRPORT`);
-    url.searchParams.set('toId', `${destinationSkyId}.AIRPORT`);
+
+    // Prefer entity IDs when available (these match the upstream API identifiers)
+    const fromId = originEntityId || `${originSkyId}.AIRPORT`;
+    const toId = destinationEntityId || `${destinationSkyId}.AIRPORT`;
+    url.searchParams.set('fromId', fromId);
+    url.searchParams.set('toId', toId);
     url.searchParams.set('departDate', date);
     url.searchParams.set('adults', String(adults));
     url.searchParams.set('children', String(children));
@@ -71,6 +79,11 @@ Deno.serve(async (req) => {
     url.searchParams.set('currency_code', 'GBP');
     url.searchParams.set('sort', 'BEST');
     url.searchParams.set('limit', '100');
+
+    // Pagination (different variants exist; upstream will ignore unknown params)
+    if (cursor) url.searchParams.set('cursor', String(cursor));
+    if (typeof offset === 'number') url.searchParams.set('offset', String(offset));
+    if (typeof page === 'number') url.searchParams.set('page', String(page));
 
     if (returnDate) {
       url.searchParams.set('returnDate', returnDate);
@@ -108,17 +121,83 @@ Deno.serve(async (req) => {
     }
 
     // Transform the response from Booking.com API
-    const flightOffers = data.data?.flightOffers || [];
+    // NOTE: The upstream response can contain multiple offer arrays (sometimes only a subset is in `flightOffers`).
+    // We pick the largest array that looks like flight offers (has `segments`) to avoid accidentally showing only ~15 items.
+    const dataRoot = data.data || {};
+    let flightOffers: any[] = Array.isArray(dataRoot.flightOffers) ? dataRoot.flightOffers : [];
+
+    // Some responses also include a `flightDeals` array which can contain additional options.
+    try {
+      const flightDeals = (dataRoot as any).flightDeals;
+      if (Array.isArray(flightDeals)) {
+        console.log(`flightDeals length: ${flightDeals.length}`);
+        if (flightDeals.length > 0) {
+          console.log('flightDeals[0] keys:', Object.keys(flightDeals[0] || {}));
+        }
+      }
+    } catch (_e) {
+      // ignore
+    }
+
+    const offerCandidates: { key: string; offers: any[] }[] = [];
+    const looksLikeOffer = (obj: any) =>
+      !!obj && typeof obj === 'object' && (Array.isArray(obj.segments) || Array.isArray(obj.offer?.segments));
+
+    for (const [key, value] of Object.entries(dataRoot)) {
+      if (!Array.isArray(value) || value.length === 0) continue;
+      const first = value[0] as any;
+      if (looksLikeOffer(first)) {
+        offerCandidates.push({ key, offers: value as any[] });
+      }
+    }
+
+    // Log useful structure hints for debugging pagination/partial-result issues
+    try {
+      const keys = Object.keys(dataRoot);
+      console.log('Data root keys:', keys);
+      const hintKeys = keys.filter((k) => /session|search|cursor|page|offset|token|next/i.test(k));
+      const hints: Record<string, unknown> = {};
+      for (const k of hintKeys) {
+        const v = (dataRoot as any)[k];
+        // Avoid logging huge objects
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null) hints[k] = v;
+        else if (Array.isArray(v)) hints[k] = { type: 'array', length: v.length };
+        else if (typeof v === 'object') hints[k] = { type: 'object', keys: Object.keys(v as any).slice(0, 20) };
+      }
+      if (Object.keys(hints).length > 0) console.log('Pagination hints:', JSON.stringify(hints));
+      if ((dataRoot as any).context && typeof (dataRoot as any).context === 'object') {
+        console.log('Context keys:', Object.keys((dataRoot as any).context));
+      }
+    } catch (_e) {
+      // ignore logging failures
+    }
+
+    if (offerCandidates.length > 0) {
+      offerCandidates.sort((a, b) => b.offers.length - a.offers.length);
+      const best = offerCandidates[0];
+      if (best.offers.length > flightOffers.length) {
+        console.log(`Using offers array \"${best.key}\" with ${best.offers.length} items (flightOffers had ${flightOffers.length})`);
+        flightOffers = best.offers;
+      } else {
+        console.log(`Using flightOffers with ${flightOffers.length} items (largest candidate: ${best.key}=${best.offers.length})`);
+      }
+    } else {
+      console.log('No offer-like arrays found in data root. Keys:', Object.keys(dataRoot));
+    }
+
     const flights = flightOffers.map((offer: any) => {
-      const segments = offer.segments || [];
+      const offerData = offer?.offer ?? offer;
+      const segments = offerData?.segments || [];
       
       return {
-        id: offer.token || offer.id || Math.random().toString(36),
+        id: offerData?.token || offerData?.id || offer?.id || Math.random().toString(36),
         price: {
-          raw: offer.priceBreakdown?.total?.units || 0,
-          formatted: offer.priceBreakdown?.total?.currencyCode 
-            ? `${offer.priceBreakdown.total.currencyCode} ${offer.priceBreakdown.total.units}`
-            : `$${offer.priceBreakdown?.total?.units || 0}`,
+          raw: offerData?.priceBreakdown?.total?.units || offerData?.price?.units || 0,
+          formatted: offerData?.priceBreakdown?.total?.currencyCode 
+            ? `${offerData.priceBreakdown.total.currencyCode} ${offerData.priceBreakdown.total.units}`
+            : offerData?.price?.currencyCode
+              ? `${offerData.price.currencyCode} ${offerData.price.units}`
+              : `$${offerData?.priceBreakdown?.total?.units || offerData?.price?.units || 0}`,
         },
         legs: segments.map((segment: any) => {
           const legs = segment.legs || [];
@@ -148,15 +227,47 @@ Deno.serve(async (req) => {
             stopCount: legs.length - 1,
           };
         }),
-        isSelfTransfer: offer.isSelfTransfer || false,
-        tags: offer.tags || [],
+        isSelfTransfer: offerData?.isSelfTransfer || false,
+        tags: offerData?.tags || offer?.tags || [],
       };
     });
 
     console.log(`Found ${flights.length} flights`);
 
+    const totalCount = data.data?.aggregation?.filteredTotalCount ?? data.data?.aggregation?.totalCount;
+    const pagination = data.data?.pagination;
+    const hasNextPage =
+      pagination?.hasNextPage ??
+      data.data?.hasNextPage ??
+      (typeof totalCount === 'number' ? flights.length < totalCount : undefined);
+
+    const next = {
+      cursor:
+        pagination?.nextCursor ??
+        pagination?.cursor ??
+        data.data?.nextCursor ??
+        data.data?.cursor ??
+        undefined,
+      offset:
+        pagination?.nextOffset ??
+        data.data?.nextOffset ??
+        (typeof pagination?.offset === 'number' ? pagination.offset : undefined),
+      page:
+        pagination?.nextPage ??
+        data.data?.nextPage ??
+        (typeof pagination?.page === 'number' ? pagination.page : undefined),
+    };
+
     return new Response(
-      JSON.stringify({ success: true, data: flights }),
+      JSON.stringify({
+        success: true,
+        data: flights,
+        meta: {
+          totalCount,
+          hasNextPage,
+          next,
+        },
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
