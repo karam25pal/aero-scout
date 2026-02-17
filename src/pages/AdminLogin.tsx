@@ -10,9 +10,8 @@ import { Plane, Lock } from 'lucide-react';
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -20,15 +19,9 @@ const AdminLogin = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (isSignUp) {
-        const { error } = await signUp(email, password);
-        if (error) throw error;
-        toast({ title: 'Account created!', description: 'Check your email to verify, then ask an admin to grant you access.' });
-      } else {
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        navigate('/admin');
-      }
+      const { error } = await signIn(email, password);
+      if (error) throw error;
+      navigate('/admin');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -61,14 +54,8 @@ const AdminLogin = () => {
             <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="mt-1" />
           </div>
           <Button type="submit" disabled={submitting} className="w-full" variant="sky">
-            {submitting ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Sign In'}
+            {submitting ? 'Please wait...' : 'Sign In'}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="text-primary hover:underline">
-              {isSignUp ? 'Sign In' : 'Sign Up'}
-            </button>
-          </p>
         </form>
 
         <p className="text-center mt-4">
