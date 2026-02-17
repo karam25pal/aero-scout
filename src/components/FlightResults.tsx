@@ -1,10 +1,10 @@
-import { FlightResult } from '@/types/flight';
 import { FlightCard } from './FlightCard';
 import { Plane } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FlightWithDeal } from '@/lib/applyDeals';
 
 interface FlightResultsProps {
-  flights: FlightResult[];
+  flights: FlightWithDeal[];
   isLoading: boolean;
   totalCount?: number;
   hasNextPage?: boolean;
@@ -39,9 +39,7 @@ export const FlightResults = ({
     );
   }
 
-  if (flights.length === 0) {
-    return null;
-  }
+  if (flights.length === 0) return null;
 
   return (
     <div className="w-full max-w-5xl mx-auto mt-8">
@@ -51,9 +49,7 @@ export const FlightResults = ({
             {flights.length} flight{flights.length !== 1 ? 's' : ''} found
           </h2>
           {typeof totalCount === 'number' && totalCount > flights.length && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Showing {flights.length} of {totalCount}
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">Showing {flights.length} of {totalCount}</p>
           )}
         </div>
       </div>
@@ -62,15 +58,9 @@ export const FlightResults = ({
           <FlightCard key={flight.id} flight={flight} />
         ))}
       </div>
-
       {hasNextPage && onLoadMore && (
         <div className="mt-6 flex justify-center">
-          <Button
-            variant="outline"
-            onClick={onLoadMore}
-            disabled={!!isLoadingMore}
-            className="min-w-40"
-          >
+          <Button variant="outline" onClick={onLoadMore} disabled={!!isLoadingMore} className="min-w-40">
             {isLoadingMore ? 'Loading…' : 'Load more'}
           </Button>
         </div>
