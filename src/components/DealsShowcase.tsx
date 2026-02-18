@@ -19,7 +19,7 @@ export const DealsShowcase = () => {
             <div key={deal.id} className="bg-card rounded-xl p-5 border border-border/50 card-shadow hover:card-shadow-hover transition-all duration-300 group">
               <div className="flex items-start justify-between mb-3">
                 <Badge variant="secondary" className="bg-accent/10 text-accent border-accent/20">
-                  {deal.discount_type === 'fixed' ? `£${deal.discount_value} OFF` : `${deal.discount_value}% OFF`}
+                  {deal.special_price != null ? `£${deal.special_price}` : deal.discount_type === 'fixed' ? `£${deal.discount_value} OFF` : `${deal.discount_value}% OFF`}
                 </Badge>
                 {deal.airline_name && (
                   <span className="text-xs text-muted-foreground">{deal.airline_name}</span>

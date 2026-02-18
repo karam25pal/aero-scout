@@ -26,6 +26,7 @@ export type Database = {
           id: string
           is_active: boolean
           origin_airport: string | null
+          special_price: number | null
           title: string
           updated_at: string
           valid_from: string
@@ -42,6 +43,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           origin_airport?: string | null
+          special_price?: number | null
           title: string
           updated_at?: string
           valid_from: string
@@ -58,6 +60,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           origin_airport?: string | null
+          special_price?: number | null
           title?: string
           updated_at?: string
           valid_from?: string

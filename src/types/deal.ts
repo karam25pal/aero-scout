@@ -9,6 +9,7 @@ export interface Deal {
   valid_until: string;
   discount_type: 'fixed' | 'percentage';
   discount_value: number;
+  special_price: number | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
