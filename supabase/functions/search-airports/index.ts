@@ -29,43 +29,53 @@ Deno.serve(async (req) => {
 
     console.log('Searching airports for:', query);
 
-    const response = await fetch(
-      `https://booking-com15.p.rapidapi.com/api/v1/flights/searchDestination?query=${encodeURIComponent(query)}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-rapidapi-host': 'booking-com15.p.rapidapi.com',
-          'x-rapidapi-key': apiKey,
-        },
-      }
-    );
+    const url = `https://flights-sky.p.rapidapi.com/flights/auto-complete?query=${encodeURIComponent(query)}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': 'flights-sky.p.rapidapi.com',
+        'x-rapidapi-key': apiKey,
+      },
+    });
 
     const data = await response.json();
     
     console.log('Airport search response:', JSON.stringify(data).substring(0, 500));
 
     if (!response.ok) {
-      console.error('Booking.com API error:', data);
+      console.error('flights-sky API error:', data);
       return new Response(
         JSON.stringify({ success: false, error: data.message || 'Failed to search airports', data: [] }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Transform the response from Booking.com API
-    const airports = (data.data || [])
-      .filter((item: any) => item.type === 'AIRPORT')
-      .map((item: any) => ({
-        entityId: item.id || '',
-        skyId: item.code || item.id || '',
-        name: item.name || '',
-        city: item.cityName || item.city || '',
-        country: item.countryName || item.country || '',
-        iata: item.code || '',
-      }))
-      .filter((airport: any) => airport.entityId && airport.iata);
+    // Transform the response from flights-sky API
+    // The auto-complete endpoint returns data with presentation.id/skyId
+    const rawResults = data?.data || [];
+    const airports = rawResults
+      .filter((item: any) => {
+        const nav = item?.navigation;
+        return nav?.entityType === 'AIRPORT' || nav?.entityType === 'CITY';
+      })
+      .map((item: any) => {
+        const presentation = item?.presentation || {};
+        const nav = item?.navigation || {};
+        const entityInfo = nav?.relevantFlightParams || {};
+        return {
+          entityId: presentation?.id || presentation?.skyId || nav?.entityId || '',
+          skyId: presentation?.skyId || presentation?.id || '',
+          name: presentation?.subtitle || presentation?.suggestionTitle || '',
+          city: nav?.localizedName || presentation?.title || '',
+          country: nav?.relevantHotelParams?.countryName || '',
+          iata: presentation?.skyId || entityInfo?.skyId || '',
+          entityType: nav?.entityType || '',
+        };
+      })
+      .filter((a: any) => a.entityId && a.skyId);
 
-    console.log(`Found ${airports.length} airports:`, airports.map((a: any) => `${a.iata} (${a.entityId})`).join(', '));
+    console.log(`Found ${airports.length} locations:`, airports.map((a: any) => `${a.iata} - ${a.city}`).join(', '));
 
     return new Response(
       JSON.stringify({ success: true, data: airports }),

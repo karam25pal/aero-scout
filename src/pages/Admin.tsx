@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Plane, Plus, Pencil, Trash2, LogOut, Tag } from 'lucide-react';
+import { AirportAutocomplete } from '@/components/AirportAutocomplete';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 type DealForm = {
@@ -149,8 +150,8 @@ const Admin = () => {
                   <div><Label>Airline Name</Label><Input value={form.airline_name} onChange={e => setForm({ ...form, airline_name: e.target.value })} placeholder="e.g. British Airways" maxLength={100} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><Label>From Airport (IATA)</Label><Input value={form.origin_airport} onChange={e => setForm({ ...form, origin_airport: e.target.value })} placeholder="e.g. LHR" maxLength={10} /></div>
-                  <div><Label>To Airport (IATA)</Label><Input value={form.destination_airport} onChange={e => setForm({ ...form, destination_airport: e.target.value })} placeholder="e.g. JFK" maxLength={10} /></div>
+                  <div><Label>From Airport</Label><AirportAutocomplete value={form.origin_airport} onChange={(val) => setForm({ ...form, origin_airport: val })} placeholder="Search airport..." iataOnly /></div>
+                  <div><Label>To Airport</Label><AirportAutocomplete value={form.destination_airport} onChange={(val) => setForm({ ...form, destination_airport: val })} placeholder="Search airport..." iataOnly /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><Label>Valid From *</Label><Input type="date" value={form.valid_from} onChange={e => setForm({ ...form, valid_from: e.target.value })} required /></div>
