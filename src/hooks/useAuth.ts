@@ -7,44 +7,63 @@ export const useAuth = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const checkAdmin = async (userId: string) => {
+    const { data } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+    return !!data;
+  };
+
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    let mounted = true;
+
+    // Set up listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
+        const u = session?.user ?? null;
+        setUser(u);
+
+        if (u) {
+          // Use setTimeout to avoid Supabase client deadlock
+          setTimeout(async () => {
+            if (!mounted) return;
+            const admin = await checkAdmin(u.id);
+            if (mounted) {
+              setIsAdmin(admin);
+              setLoading(false);
+            }
+          }, 0);
+        } else {
+          setIsAdmin(false);
+          setLoading(false);
+        }
+      }
+    );
+
+    // Then check initial session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        const { data } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', u.id)
-          .eq('role', 'admin')
-          .maybeSingle();
-        setIsAdmin(!!data);
+        const admin = await checkAdmin(u.id);
+        if (mounted) {
+          setIsAdmin(admin);
+          setLoading(false);
+        }
       } else {
-        setIsAdmin(false);
-      }
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', u.id)
-          .eq('role', 'admin')
-          .maybeSingle()
-          .then(({ data }) => {
-            setIsAdmin(!!data);
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = (email: string, password: string) =>
