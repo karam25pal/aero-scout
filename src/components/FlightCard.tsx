@@ -30,7 +30,7 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
         <div className="flex items-center gap-2 mb-4 -mt-1">
           <Badge className="bg-accent text-accent-foreground gap-1">
             <Tag className="h-3 w-3" />
-            {deal.title} — {deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
+            {deal.title} — {deal.special_price != null ? `Special £${deal.special_price}` : deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
           </Badge>
         </div>
       )}

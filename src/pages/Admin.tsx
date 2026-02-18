@@ -23,12 +23,13 @@ type DealForm = {
   valid_until: string;
   discount_type: 'fixed' | 'percentage';
   discount_value: string;
+  special_price: string;
   is_active: boolean;
 };
 
 const emptyForm: DealForm = {
   title: '', description: '', airline_name: '', origin_airport: '', destination_airport: '',
-  valid_from: '', valid_until: '', discount_type: 'percentage', discount_value: '', is_active: true,
+  valid_from: '', valid_until: '', discount_type: 'percentage', discount_value: '', special_price: '', is_active: true,
 };
 
 const Admin = () => {
@@ -68,6 +69,7 @@ const Admin = () => {
       valid_until: deal.valid_until,
       discount_type: deal.discount_type,
       discount_value: String(deal.discount_value),
+      special_price: deal.special_price != null ? String(deal.special_price) : '',
       is_active: deal.is_active,
     });
     setEditingId(deal.id);
@@ -87,6 +89,7 @@ const Admin = () => {
       valid_until: form.valid_until,
       discount_type: form.discount_type,
       discount_value: parseFloat(form.discount_value),
+      special_price: form.special_price.trim() ? parseFloat(form.special_price) : null,
       is_active: form.is_active,
     };
 
@@ -170,6 +173,10 @@ const Admin = () => {
                   </div>
                   <div><Label>Discount Value *</Label><Input type="number" min="0.01" step="0.01" value={form.discount_value} onChange={e => setForm({ ...form, discount_value: e.target.value })} required placeholder={form.discount_type === 'fixed' ? '50' : '15'} /></div>
                 </div>
+                <div>
+                  <Label>Special Price (£) — overrides discount if set</Label>
+                  <Input type="number" min="0" step="0.01" value={form.special_price} onChange={e => setForm({ ...form, special_price: e.target.value })} placeholder="Leave empty to use discount" />
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} />
                   <Label>Active</Label>
@@ -204,7 +211,7 @@ const Admin = () => {
                   <p className="text-sm text-muted-foreground">
                     {deal.airline_name && `${deal.airline_name} · `}
                     {deal.origin_airport && deal.destination_airport ? `${deal.origin_airport} → ${deal.destination_airport} · ` : ''}
-                    {deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
+                    {deal.special_price != null ? `Special: £${deal.special_price}` : deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
                     {` · ${deal.valid_from} to ${deal.valid_until}`}
                   </p>
                   {deal.description && <p className="text-sm text-muted-foreground mt-1">{deal.description}</p>}

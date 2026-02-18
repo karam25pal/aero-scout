@@ -1,0 +1,1 @@
+ALTER TABLE public.deals ADD COLUMN special_price numeric DEFAULT NULL;

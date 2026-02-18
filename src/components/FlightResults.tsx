@@ -1,5 +1,5 @@
 import { FlightCard } from './FlightCard';
-import { Plane } from 'lucide-react';
+import { Plane, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FlightWithDeal } from '@/lib/applyDeals';
 
@@ -41,6 +41,9 @@ export const FlightResults = ({
 
   if (flights.length === 0) return null;
 
+  const dealFlights = flights.filter(f => f.deal);
+  const regularFlights = flights.filter(f => !f.deal);
+
   return (
     <div className="w-full max-w-5xl mx-auto mt-8">
       <div className="flex items-center justify-between mb-6">
@@ -53,11 +56,37 @@ export const FlightResults = ({
           )}
         </div>
       </div>
-      <div className="space-y-4">
-        {flights.map((flight) => (
-          <FlightCard key={flight.id} flight={flight} />
-        ))}
-      </div>
+
+      {/* Deal flights section */}
+      {dealFlights.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Tag className="h-5 w-5 text-accent" />
+            <h3 className="text-lg font-bold text-accent">Special Deals</h3>
+            <span className="text-sm text-muted-foreground">({dealFlights.length} deal{dealFlights.length !== 1 ? 's' : ''} applied)</span>
+          </div>
+          <div className="space-y-4">
+            {dealFlights.map((flight) => (
+              <FlightCard key={flight.id} flight={flight} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regular flights */}
+      {regularFlights.length > 0 && (
+        <div>
+          {dealFlights.length > 0 && (
+            <h3 className="text-lg font-semibold text-foreground mb-4">Other Flights</h3>
+          )}
+          <div className="space-y-4">
+            {regularFlights.map((flight) => (
+              <FlightCard key={flight.id} flight={flight} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {hasNextPage && onLoadMore && (
         <div className="mt-6 flex justify-center">
           <Button variant="outline" onClick={onLoadMore} disabled={!!isLoadingMore} className="min-w-40">
