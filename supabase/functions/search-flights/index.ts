@@ -6,7 +6,7 @@ const corsHeaders = {
 // ── Minimal Protobuf Encoder ──────────────────────────────────
 function encodeVarint(value: number): number[] {
   const bytes: number[] = [];
-  let v = value >>> 0; // unsigned
+  let v = value >>> 0;
   while (v > 0x7f) {
     bytes.push((v & 0x7f) | 0x80);
     v >>>= 7;
@@ -49,7 +49,6 @@ function encodeFlightLeg(date: string, fromIata: string, toIata: string): number
   ];
 }
 
-// Seat class: economy=1, premium_economy=2, business=3, first=4
 const SEAT_CLASS_MAP: Record<string, number> = {
   economy: 1,
   premium_economy: 2,
@@ -65,50 +64,40 @@ function buildTfsParam(
   adults = 1,
   seatClass = 'economy',
 ): string {
-  const tripType = returnDate ? 1 : 2; // 1=round-trip, 2=one-way
+  const tripType = returnDate ? 1 : 2;
   const seatValue = SEAT_CLASS_MAP[seatClass] || 1;
 
   const parts: number[] = [];
   parts.push(...encodeVarintField(1, 28));
   parts.push(...encodeVarintField(2, tripType));
 
-  // Outbound leg
   const outboundLeg = encodeFlightLeg(departDate, fromIata, toIata);
   parts.push(...encodeLengthDelimited(3, outboundLeg));
 
-  // Return leg (if round-trip)
   if (returnDate) {
     const returnLeg = encodeFlightLeg(returnDate, toIata, fromIata);
     parts.push(...encodeLengthDelimited(3, returnLeg));
   }
 
-  // Adults & other fields
   parts.push(...encodeVarintField(8, adults));
   parts.push(...encodeVarintField(9, 1));
   parts.push(...encodeVarintField(14, 1));
 
-  // Passengers field (field 16) with max value marker
   const passengersMsg = [
     ...encodeTag(1, 0),
-    // encode -1 as max uint64: 0xFF x9 then 0x01
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01,
   ];
   parts.push(...encodeLengthDelimited(16, passengersMsg));
-
-  // Seat class (field 19)
   parts.push(...encodeVarintField(19, seatValue));
 
-  // Base64 URL-safe encode
   const bytes = new Uint8Array(parts);
   let b64 = btoa(String.fromCharCode(...bytes));
-  // Make URL-safe
   b64 = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   return b64;
 }
 
 // ── HTML Flight Parser ──────────────────────────────────────
 function extractFlightDataFromScripts(html: string): string {
-  // Google Flights embeds data in AF_initDataCallback script blocks
   const dataChunks: string[] = [];
   const regex = /AF_initDataCallback\(\s*\{[^}]*data:\s*([\s\S]*?)\}\s*\)\s*;/g;
   let match;
@@ -121,14 +110,12 @@ function extractFlightDataFromScripts(html: string): string {
 
   if (dataChunks.length > 0) {
     console.log(`Found ${dataChunks.length} AF_initDataCallback chunks`);
-    // Sort by size descending - largest chunks likely contain flight data
     dataChunks.sort((a, b) => b.length - a.length);
     let combined = dataChunks.join('\n---CHUNK---\n');
     if (combined.length > 200000) combined = combined.slice(0, 200000);
     return combined;
   }
 
-  // Fallback: extract visible text from body  
   let body = html;
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   if (bodyMatch) body = bodyMatch[1];
@@ -257,10 +244,11 @@ Deno.serve(async (req) => {
     }
 
     const apiToken = Deno.env.get('BRIGHTDATA_API_TOKEN');
-    const zone = Deno.env.get('BRIGHTDATA_ZONE');
+    const serpZone = Deno.env.get('BRIGHTDATA_SERP_ZONE');
+    const fallbackZone = Deno.env.get('BRIGHTDATA_ZONE');
     const aiKey = Deno.env.get('LOVABLE_API_KEY');
 
-    if (!apiToken || !zone) {
+    if (!apiToken) {
       return new Response(
         JSON.stringify({ success: false, error: 'BrightData credentials not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -275,12 +263,23 @@ Deno.serve(async (req) => {
 
     console.log(`Flight search: ${origin} → ${destination} on ${date}`);
 
-    // Step 1: Build the tfs parameter and Google Flights URL
+    // Build the tfs parameter and Google Flights URL
     const tfs = buildTfsParam(origin, destination, date, returnDate, adults, cabinClass);
     const flightsUrl = `https://www.google.com/travel/flights/search?tfs=${tfs}&gl=uk&hl=en&curr=GBP`;
     console.log('Google Flights URL:', flightsUrl);
 
-    // Step 2: Fetch via BrightData Direct API
+    // Try SERP API first (returns rendered page with all flights), fall back to Web Unlocker
+    const zone = serpZone || fallbackZone;
+    if (!zone) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'BrightData zone not configured', data: [] }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const useSerpApi = !!serpZone;
+    console.log(`Using ${useSerpApi ? 'SERP API' : 'Web Unlocker'} zone: ${zone}`);
+
     const bdResponse = await fetch('https://api.brightdata.com/request', {
       method: 'POST',
       headers: {
@@ -302,13 +301,10 @@ Deno.serve(async (req) => {
 
     const html = await bdResponse.text();
     console.log(`BrightData returned ${html.length} chars`);
-    // Log first 500 chars to debug
     console.log('Response preview:', html.slice(0, 500));
 
-    // If response is too small, it's likely parsed JSON (not HTML)
     if (html.length < 1000) {
       console.error('Response too small, likely no flight data. Full response:', html);
-      // Return empty results gracefully
       return new Response(
         JSON.stringify({
           success: true,
@@ -319,11 +315,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 3: Parse flights from HTML using AI
+    // Parse flights from HTML using AI
     const rawFlights = await parseFlightsWithAI(html, aiKey, origin, destination);
     console.log(`AI extracted ${rawFlights.length} flights`);
 
-    // Step 4: Transform to app format
+    // Transform to app format
     const flights = rawFlights
       .map((f: any, i: number) => transformToAppFormat(f, i))
       .filter((f: any) => f !== null);
