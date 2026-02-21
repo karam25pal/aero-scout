@@ -3,6 +3,170 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Top airports database - no external API needed
+const AIRPORTS = [
+  { iata: 'LHR', name: 'Heathrow Airport', city: 'London', country: 'United Kingdom' },
+  { iata: 'LGW', name: 'Gatwick Airport', city: 'London', country: 'United Kingdom' },
+  { iata: 'STN', name: 'Stansted Airport', city: 'London', country: 'United Kingdom' },
+  { iata: 'LTN', name: 'Luton Airport', city: 'London', country: 'United Kingdom' },
+  { iata: 'LCY', name: 'London City Airport', city: 'London', country: 'United Kingdom' },
+  { iata: 'MAN', name: 'Manchester Airport', city: 'Manchester', country: 'United Kingdom' },
+  { iata: 'BHX', name: 'Birmingham Airport', city: 'Birmingham', country: 'United Kingdom' },
+  { iata: 'EDI', name: 'Edinburgh Airport', city: 'Edinburgh', country: 'United Kingdom' },
+  { iata: 'GLA', name: 'Glasgow Airport', city: 'Glasgow', country: 'United Kingdom' },
+  { iata: 'BRS', name: 'Bristol Airport', city: 'Bristol', country: 'United Kingdom' },
+  { iata: 'NCL', name: 'Newcastle Airport', city: 'Newcastle', country: 'United Kingdom' },
+  { iata: 'EMA', name: 'East Midlands Airport', city: 'Nottingham', country: 'United Kingdom' },
+  { iata: 'LPL', name: 'Liverpool John Lennon Airport', city: 'Liverpool', country: 'United Kingdom' },
+  { iata: 'BFS', name: 'Belfast International Airport', city: 'Belfast', country: 'United Kingdom' },
+  { iata: 'ABZ', name: 'Aberdeen Airport', city: 'Aberdeen', country: 'United Kingdom' },
+  { iata: 'JFK', name: 'John F. Kennedy International', city: 'New York', country: 'United States' },
+  { iata: 'LAX', name: 'Los Angeles International', city: 'Los Angeles', country: 'United States' },
+  { iata: 'ORD', name: "O'Hare International", city: 'Chicago', country: 'United States' },
+  { iata: 'ATL', name: 'Hartsfield-Jackson International', city: 'Atlanta', country: 'United States' },
+  { iata: 'DFW', name: 'Dallas/Fort Worth International', city: 'Dallas', country: 'United States' },
+  { iata: 'DEN', name: 'Denver International', city: 'Denver', country: 'United States' },
+  { iata: 'SFO', name: 'San Francisco International', city: 'San Francisco', country: 'United States' },
+  { iata: 'SEA', name: 'Seattle-Tacoma International', city: 'Seattle', country: 'United States' },
+  { iata: 'MIA', name: 'Miami International', city: 'Miami', country: 'United States' },
+  { iata: 'EWR', name: 'Newark Liberty International', city: 'Newark', country: 'United States' },
+  { iata: 'BOS', name: 'Logan International', city: 'Boston', country: 'United States' },
+  { iata: 'IAD', name: 'Dulles International', city: 'Washington DC', country: 'United States' },
+  { iata: 'DCA', name: 'Reagan National', city: 'Washington DC', country: 'United States' },
+  { iata: 'LAS', name: 'Harry Reid International', city: 'Las Vegas', country: 'United States' },
+  { iata: 'PHX', name: 'Phoenix Sky Harbor', city: 'Phoenix', country: 'United States' },
+  { iata: 'MSP', name: 'Minneapolis-St Paul International', city: 'Minneapolis', country: 'United States' },
+  { iata: 'DTW', name: 'Detroit Metropolitan', city: 'Detroit', country: 'United States' },
+  { iata: 'PHL', name: 'Philadelphia International', city: 'Philadelphia', country: 'United States' },
+  { iata: 'CLT', name: 'Charlotte Douglas International', city: 'Charlotte', country: 'United States' },
+  { iata: 'MCO', name: 'Orlando International', city: 'Orlando', country: 'United States' },
+  { iata: 'IAH', name: 'George Bush Intercontinental', city: 'Houston', country: 'United States' },
+  { iata: 'HNL', name: 'Daniel K. Inouye International', city: 'Honolulu', country: 'United States' },
+  { iata: 'SAN', name: 'San Diego International', city: 'San Diego', country: 'United States' },
+  { iata: 'TPA', name: 'Tampa International', city: 'Tampa', country: 'United States' },
+  { iata: 'CDG', name: 'Charles de Gaulle Airport', city: 'Paris', country: 'France' },
+  { iata: 'ORY', name: 'Orly Airport', city: 'Paris', country: 'France' },
+  { iata: 'NCE', name: 'Nice Côte d\'Azur Airport', city: 'Nice', country: 'France' },
+  { iata: 'LYS', name: 'Lyon-Saint Exupéry Airport', city: 'Lyon', country: 'France' },
+  { iata: 'MRS', name: 'Marseille Provence Airport', city: 'Marseille', country: 'France' },
+  { iata: 'FRA', name: 'Frankfurt Airport', city: 'Frankfurt', country: 'Germany' },
+  { iata: 'MUC', name: 'Munich Airport', city: 'Munich', country: 'Germany' },
+  { iata: 'BER', name: 'Berlin Brandenburg Airport', city: 'Berlin', country: 'Germany' },
+  { iata: 'DUS', name: 'Düsseldorf Airport', city: 'Düsseldorf', country: 'Germany' },
+  { iata: 'HAM', name: 'Hamburg Airport', city: 'Hamburg', country: 'Germany' },
+  { iata: 'AMS', name: 'Amsterdam Schiphol', city: 'Amsterdam', country: 'Netherlands' },
+  { iata: 'MAD', name: 'Adolfo Suárez Madrid-Barajas', city: 'Madrid', country: 'Spain' },
+  { iata: 'BCN', name: 'Barcelona-El Prat', city: 'Barcelona', country: 'Spain' },
+  { iata: 'AGP', name: 'Málaga-Costa del Sol', city: 'Málaga', country: 'Spain' },
+  { iata: 'PMI', name: 'Palma de Mallorca Airport', city: 'Palma', country: 'Spain' },
+  { iata: 'ALC', name: 'Alicante-Elche Airport', city: 'Alicante', country: 'Spain' },
+  { iata: 'TFS', name: 'Tenerife South Airport', city: 'Tenerife', country: 'Spain' },
+  { iata: 'FCO', name: 'Leonardo da Vinci-Fiumicino', city: 'Rome', country: 'Italy' },
+  { iata: 'MXP', name: 'Milan Malpensa', city: 'Milan', country: 'Italy' },
+  { iata: 'VCE', name: 'Venice Marco Polo', city: 'Venice', country: 'Italy' },
+  { iata: 'NAP', name: 'Naples International', city: 'Naples', country: 'Italy' },
+  { iata: 'LIS', name: 'Lisbon Humberto Delgado', city: 'Lisbon', country: 'Portugal' },
+  { iata: 'OPO', name: 'Porto Airport', city: 'Porto', country: 'Portugal' },
+  { iata: 'FAO', name: 'Faro Airport', city: 'Faro', country: 'Portugal' },
+  { iata: 'ATH', name: 'Athens International', city: 'Athens', country: 'Greece' },
+  { iata: 'SKG', name: 'Thessaloniki Airport', city: 'Thessaloniki', country: 'Greece' },
+  { iata: 'IST', name: 'Istanbul Airport', city: 'Istanbul', country: 'Turkey' },
+  { iata: 'SAW', name: 'Sabiha Gökçen Airport', city: 'Istanbul', country: 'Turkey' },
+  { iata: 'AYT', name: 'Antalya Airport', city: 'Antalya', country: 'Turkey' },
+  { iata: 'ZRH', name: 'Zurich Airport', city: 'Zurich', country: 'Switzerland' },
+  { iata: 'GVA', name: 'Geneva Airport', city: 'Geneva', country: 'Switzerland' },
+  { iata: 'VIE', name: 'Vienna International', city: 'Vienna', country: 'Austria' },
+  { iata: 'CPH', name: 'Copenhagen Airport', city: 'Copenhagen', country: 'Denmark' },
+  { iata: 'OSL', name: 'Oslo Gardermoen', city: 'Oslo', country: 'Norway' },
+  { iata: 'ARN', name: 'Stockholm Arlanda', city: 'Stockholm', country: 'Sweden' },
+  { iata: 'HEL', name: 'Helsinki-Vantaa', city: 'Helsinki', country: 'Finland' },
+  { iata: 'WAW', name: 'Warsaw Chopin Airport', city: 'Warsaw', country: 'Poland' },
+  { iata: 'PRG', name: 'Václav Havel Airport', city: 'Prague', country: 'Czech Republic' },
+  { iata: 'BUD', name: 'Budapest Ferenc Liszt', city: 'Budapest', country: 'Hungary' },
+  { iata: 'OTP', name: 'Henri Coandă International', city: 'Bucharest', country: 'Romania' },
+  { iata: 'DUB', name: 'Dublin Airport', city: 'Dublin', country: 'Ireland' },
+  { iata: 'BRU', name: 'Brussels Airport', city: 'Brussels', country: 'Belgium' },
+  { iata: 'DXB', name: 'Dubai International', city: 'Dubai', country: 'UAE' },
+  { iata: 'AUH', name: 'Abu Dhabi International', city: 'Abu Dhabi', country: 'UAE' },
+  { iata: 'DOH', name: 'Hamad International', city: 'Doha', country: 'Qatar' },
+  { iata: 'RUH', name: 'King Khalid International', city: 'Riyadh', country: 'Saudi Arabia' },
+  { iata: 'JED', name: 'King Abdulaziz International', city: 'Jeddah', country: 'Saudi Arabia' },
+  { iata: 'BAH', name: 'Bahrain International', city: 'Manama', country: 'Bahrain' },
+  { iata: 'KWI', name: 'Kuwait International', city: 'Kuwait City', country: 'Kuwait' },
+  { iata: 'CAI', name: 'Cairo International', city: 'Cairo', country: 'Egypt' },
+  { iata: 'CMN', name: 'Mohammed V International', city: 'Casablanca', country: 'Morocco' },
+  { iata: 'RAK', name: 'Marrakech Menara', city: 'Marrakech', country: 'Morocco' },
+  { iata: 'JNB', name: 'O.R. Tambo International', city: 'Johannesburg', country: 'South Africa' },
+  { iata: 'CPT', name: 'Cape Town International', city: 'Cape Town', country: 'South Africa' },
+  { iata: 'NBO', name: 'Jomo Kenyatta International', city: 'Nairobi', country: 'Kenya' },
+  { iata: 'ADD', name: 'Bole International', city: 'Addis Ababa', country: 'Ethiopia' },
+  { iata: 'LOS', name: 'Murtala Muhammed International', city: 'Lagos', country: 'Nigeria' },
+  { iata: 'NRT', name: 'Narita International', city: 'Tokyo', country: 'Japan' },
+  { iata: 'HND', name: 'Haneda Airport', city: 'Tokyo', country: 'Japan' },
+  { iata: 'KIX', name: 'Kansai International', city: 'Osaka', country: 'Japan' },
+  { iata: 'ICN', name: 'Incheon International', city: 'Seoul', country: 'South Korea' },
+  { iata: 'PEK', name: 'Beijing Capital International', city: 'Beijing', country: 'China' },
+  { iata: 'PVG', name: 'Shanghai Pudong International', city: 'Shanghai', country: 'China' },
+  { iata: 'CAN', name: 'Guangzhou Baiyun International', city: 'Guangzhou', country: 'China' },
+  { iata: 'HKG', name: 'Hong Kong International', city: 'Hong Kong', country: 'Hong Kong' },
+  { iata: 'SIN', name: 'Singapore Changi', city: 'Singapore', country: 'Singapore' },
+  { iata: 'BKK', name: 'Suvarnabhumi Airport', city: 'Bangkok', country: 'Thailand' },
+  { iata: 'KUL', name: 'Kuala Lumpur International', city: 'Kuala Lumpur', country: 'Malaysia' },
+  { iata: 'CGK', name: 'Soekarno-Hatta International', city: 'Jakarta', country: 'Indonesia' },
+  { iata: 'DPS', name: 'Ngurah Rai International', city: 'Bali', country: 'Indonesia' },
+  { iata: 'MNL', name: 'Ninoy Aquino International', city: 'Manila', country: 'Philippines' },
+  { iata: 'DEL', name: 'Indira Gandhi International', city: 'Delhi', country: 'India' },
+  { iata: 'BOM', name: 'Chhatrapati Shivaji Maharaj', city: 'Mumbai', country: 'India' },
+  { iata: 'BLR', name: 'Kempegowda International', city: 'Bangalore', country: 'India' },
+  { iata: 'MAA', name: 'Chennai International', city: 'Chennai', country: 'India' },
+  { iata: 'CCU', name: 'Netaji Subhas Chandra Bose', city: 'Kolkata', country: 'India' },
+  { iata: 'HYD', name: 'Rajiv Gandhi International', city: 'Hyderabad', country: 'India' },
+  { iata: 'AMD', name: 'Sardar Vallabhbhai Patel', city: 'Ahmedabad', country: 'India' },
+  { iata: 'COK', name: 'Cochin International', city: 'Kochi', country: 'India' },
+  { iata: 'GOI', name: 'Goa International', city: 'Goa', country: 'India' },
+  { iata: 'LKO', name: 'Chaudhary Charan Singh', city: 'Lucknow', country: 'India' },
+  { iata: 'JAI', name: 'Jaipur International', city: 'Jaipur', country: 'India' },
+  { iata: 'ATQ', name: 'Sri Guru Ram Dass Jee International', city: 'Amritsar', country: 'India' },
+  { iata: 'SYD', name: 'Sydney Kingsford Smith', city: 'Sydney', country: 'Australia' },
+  { iata: 'MEL', name: 'Melbourne Tullamarine', city: 'Melbourne', country: 'Australia' },
+  { iata: 'BNE', name: 'Brisbane Airport', city: 'Brisbane', country: 'Australia' },
+  { iata: 'PER', name: 'Perth Airport', city: 'Perth', country: 'Australia' },
+  { iata: 'AKL', name: 'Auckland Airport', city: 'Auckland', country: 'New Zealand' },
+  { iata: 'YYZ', name: 'Toronto Pearson International', city: 'Toronto', country: 'Canada' },
+  { iata: 'YVR', name: 'Vancouver International', city: 'Vancouver', country: 'Canada' },
+  { iata: 'YUL', name: 'Montréal-Trudeau International', city: 'Montreal', country: 'Canada' },
+  { iata: 'YYC', name: 'Calgary International', city: 'Calgary', country: 'Canada' },
+  { iata: 'MEX', name: 'Mexico City International', city: 'Mexico City', country: 'Mexico' },
+  { iata: 'CUN', name: 'Cancún International', city: 'Cancún', country: 'Mexico' },
+  { iata: 'GRU', name: 'São Paulo-Guarulhos', city: 'São Paulo', country: 'Brazil' },
+  { iata: 'GIG', name: 'Rio de Janeiro-Galeão', city: 'Rio de Janeiro', country: 'Brazil' },
+  { iata: 'EZE', name: 'Ministro Pistarini International', city: 'Buenos Aires', country: 'Argentina' },
+  { iata: 'SCL', name: 'Arturo Merino Benítez International', city: 'Santiago', country: 'Chile' },
+  { iata: 'BOG', name: 'El Dorado International', city: 'Bogotá', country: 'Colombia' },
+  { iata: 'LIM', name: 'Jorge Chávez International', city: 'Lima', country: 'Peru' },
+  { iata: 'PTY', name: 'Tocumen International', city: 'Panama City', country: 'Panama' },
+  { iata: 'SJO', name: 'Juan Santamaría International', city: 'San José', country: 'Costa Rica' },
+  { iata: 'MBJ', name: 'Sangster International', city: 'Montego Bay', country: 'Jamaica' },
+  { iata: 'NAS', name: 'Lynden Pindling International', city: 'Nassau', country: 'Bahamas' },
+  { iata: 'BGI', name: 'Grantley Adams International', city: 'Bridgetown', country: 'Barbados' },
+  { iata: 'TLV', name: 'Ben Gurion International', city: 'Tel Aviv', country: 'Israel' },
+  { iata: 'AMM', name: 'Queen Alia International', city: 'Amman', country: 'Jordan' },
+  { iata: 'BEY', name: 'Rafic Hariri International', city: 'Beirut', country: 'Lebanon' },
+  { iata: 'ISB', name: 'Islamabad International', city: 'Islamabad', country: 'Pakistan' },
+  { iata: 'KHI', name: 'Jinnah International', city: 'Karachi', country: 'Pakistan' },
+  { iata: 'LHE', name: 'Allama Iqbal International', city: 'Lahore', country: 'Pakistan' },
+  { iata: 'DAC', name: 'Hazrat Shahjalal International', city: 'Dhaka', country: 'Bangladesh' },
+  { iata: 'CMB', name: 'Bandaranaike International', city: 'Colombo', country: 'Sri Lanka' },
+  { iata: 'KTM', name: 'Tribhuvan International', city: 'Kathmandu', country: 'Nepal' },
+  { iata: 'SGN', name: 'Tan Son Nhat International', city: 'Ho Chi Minh City', country: 'Vietnam' },
+  { iata: 'HAN', name: 'Noi Bai International', city: 'Hanoi', country: 'Vietnam' },
+  { iata: 'RGN', name: 'Yangon International', city: 'Yangon', country: 'Myanmar' },
+  { iata: 'PNH', name: 'Phnom Penh International', city: 'Phnom Penh', country: 'Cambodia' },
+  { iata: 'TPE', name: 'Taiwan Taoyuan International', city: 'Taipei', country: 'Taiwan' },
+  { iata: 'MLE', name: 'Velana International', city: 'Malé', country: 'Maldives' },
+  { iata: 'MRU', name: 'Sir Seewoosagur Ramgoolam', city: 'Mauritius', country: 'Mauritius' },
+];
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -18,64 +182,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('RAPIDAPI_KEY');
-    if (!apiKey) {
-      console.error('RAPIDAPI_KEY not configured');
-      return new Response(
-        JSON.stringify({ success: false, error: 'API key not configured', data: [] }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Searching airports for:', query);
-
-    const url = `https://flights-sky.p.rapidapi.com/flights/auto-complete?query=${encodeURIComponent(query)}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-host': 'flights-sky.p.rapidapi.com',
-        'x-rapidapi-key': apiKey,
-      },
-    });
-
-    const data = await response.json();
-    
-    console.log('Airport search response:', JSON.stringify(data).substring(0, 500));
-
-    if (!response.ok) {
-      console.error('flights-sky API error:', data);
-      return new Response(
-        JSON.stringify({ success: false, error: data.message || 'Failed to search airports', data: [] }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Transform the response from flights-sky API
-    // The auto-complete endpoint returns data with presentation.id/skyId
-    const rawResults = data?.data || [];
-    const airports = rawResults
-      .filter((item: any) => {
-        const nav = item?.navigation;
-        return nav?.entityType === 'AIRPORT' || nav?.entityType === 'CITY';
-      })
-      .map((item: any) => {
-        const presentation = item?.presentation || {};
-        const nav = item?.navigation || {};
-        const entityInfo = nav?.relevantFlightParams || {};
-        return {
-          entityId: presentation?.id || presentation?.skyId || nav?.entityId || '',
-          skyId: presentation?.skyId || presentation?.id || '',
-          name: presentation?.subtitle || presentation?.suggestionTitle || '',
-          city: nav?.localizedName || presentation?.title || '',
-          country: nav?.relevantHotelParams?.countryName || '',
-          iata: presentation?.skyId || entityInfo?.skyId || '',
-          entityType: nav?.entityType || '',
-        };
-      })
-      .filter((a: any) => a.entityId && a.skyId);
-
-    console.log(`Found ${airports.length} locations:`, airports.map((a: any) => `${a.iata} - ${a.city}`).join(', '));
+    const q = query.toLowerCase();
+    const airports = AIRPORTS.filter(a =>
+      a.iata.toLowerCase().includes(q) ||
+      a.name.toLowerCase().includes(q) ||
+      a.city.toLowerCase().includes(q) ||
+      a.country.toLowerCase().includes(q)
+    ).slice(0, 10).map(a => ({
+      entityId: a.iata,
+      skyId: a.iata,
+      name: a.name,
+      city: a.city,
+      country: a.country,
+      iata: a.iata,
+      entityType: 'AIRPORT',
+    }));
 
     return new Response(
       JSON.stringify({ success: true, data: airports }),
