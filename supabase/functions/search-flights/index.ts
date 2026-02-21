@@ -3,218 +3,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ── Minimal Protobuf Encoder ──────────────────────────────────
-function encodeVarint(value: number): number[] {
-  const bytes: number[] = [];
-  let v = value >>> 0;
-  while (v > 0x7f) {
-    bytes.push((v & 0x7f) | 0x80);
-    v >>>= 7;
-  }
-  bytes.push(v & 0x7f);
-  return bytes;
-}
+const API_HOST = 'google-flights2.p.rapidapi.com';
 
-function encodeTag(fieldNumber: number, wireType: number): number[] {
-  return encodeVarint((fieldNumber << 3) | wireType);
-}
-
-function encodeVarintField(fieldNumber: number, value: number): number[] {
-  return [...encodeTag(fieldNumber, 0), ...encodeVarint(value)];
-}
-
-function encodeLengthDelimited(fieldNumber: number, data: number[]): number[] {
-  return [...encodeTag(fieldNumber, 2), ...encodeVarint(data.length), ...data];
-}
-
-function encodeString(fieldNumber: number, str: string): number[] {
-  const encoder = new TextEncoder();
-  const bytes = Array.from(encoder.encode(str));
-  return encodeLengthDelimited(fieldNumber, bytes);
-}
-
-function encodeAirport(fieldNumber: number, iata: string): number[] {
-  const airportMsg = [
-    ...encodeVarintField(1, 1),
-    ...encodeString(2, iata),
-  ];
-  return encodeLengthDelimited(fieldNumber, airportMsg);
-}
-
-function encodeFlightLeg(date: string, fromIata: string, toIata: string): number[] {
-  return [
-    ...encodeString(2, date),
-    ...encodeAirport(13, fromIata),
-    ...encodeAirport(14, toIata),
-  ];
-}
-
-const SEAT_CLASS_MAP: Record<string, number> = {
-  economy: 1,
-  premium_economy: 2,
-  business: 3,
-  first: 4,
+const CABIN_CLASS_MAP: Record<string, string> = {
+  economy: 'ECONOMY',
+  premium_economy: 'PREMIUM_ECONOMY',
+  business: 'BUSINESS',
+  first: 'FIRST',
 };
 
-function buildTfsParam(
-  fromIata: string,
-  toIata: string,
-  departDate: string,
-  returnDate?: string,
-  adults = 1,
-  seatClass = 'economy',
-): string {
-  const tripType = returnDate ? 1 : 2;
-  const seatValue = SEAT_CLASS_MAP[seatClass] || 1;
-
-  const parts: number[] = [];
-  parts.push(...encodeVarintField(1, 28));
-  parts.push(...encodeVarintField(2, tripType));
-
-  const outboundLeg = encodeFlightLeg(departDate, fromIata, toIata);
-  parts.push(...encodeLengthDelimited(3, outboundLeg));
-
-  if (returnDate) {
-    const returnLeg = encodeFlightLeg(returnDate, toIata, fromIata);
-    parts.push(...encodeLengthDelimited(3, returnLeg));
-  }
-
-  parts.push(...encodeVarintField(8, adults));
-  parts.push(...encodeVarintField(9, 1));
-  parts.push(...encodeVarintField(14, 1));
-
-  const passengersMsg = [
-    ...encodeTag(1, 0),
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01,
-  ];
-  parts.push(...encodeLengthDelimited(16, passengersMsg));
-  parts.push(...encodeVarintField(19, seatValue));
-
-  const bytes = new Uint8Array(parts);
-  let b64 = btoa(String.fromCharCode(...bytes));
-  b64 = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return b64;
-}
-
-// ── HTML Flight Parser ──────────────────────────────────────
-function extractFlightDataFromScripts(html: string): string {
-  const dataChunks: string[] = [];
-  const regex = /AF_initDataCallback\(\s*\{[^}]*data:\s*([\s\S]*?)\}\s*\)\s*;/g;
-  let match;
-  while ((match = regex.exec(html)) !== null) {
-    const chunk = match[1].trim();
-    if (chunk.length > 100) {
-      dataChunks.push(chunk);
-    }
-  }
-
-  if (dataChunks.length > 0) {
-    console.log(`Found ${dataChunks.length} AF_initDataCallback chunks`);
-    dataChunks.sort((a, b) => b.length - a.length);
-    let combined = dataChunks.join('\n---CHUNK---\n');
-    if (combined.length > 200000) combined = combined.slice(0, 200000);
-    return combined;
-  }
-
-  let body = html;
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyMatch) body = bodyMatch[1];
-  body = body.replace(/<style[\s\S]*?<\/style>/gi, '');
-  body = body.replace(/<link[^>]*>/gi, '');
-  body = body.replace(/<meta[^>]*>/gi, '');
-  body = body.replace(/<[^>]+>/g, ' ');
-  body = body.replace(/\s{2,}/g, ' ');
-  if (body.length > 200000) body = body.slice(0, 200000);
-  return body;
-}
-
-async function parseFlightsWithAI(
-  html: string,
-  aiKey: string,
-  origin: string,
-  destination: string,
-): Promise<any[]> {
-  const content_to_parse = extractFlightDataFromScripts(html);
-  console.log(`Sending ${content_to_parse.length} chars to AI for parsing`);
-
-  const prompt = `Extract ALL flight results from this Google Flights page data. The data is from AF_initDataCallback JavaScript arrays. Look for arrays containing flight information: airline names, departure/arrival times, prices, durations, number of stops. Extract EVERY single flight - do not skip any. Return ONLY a valid JSON array of flight objects. Each object must have:
-{"airline":"string","airlineLogo":"string or empty","departureTime":"HH:MM","arrivalTime":"HH:MM","duration":"e.g. 7 hr 30 min","durationMinutes":450,"stops":0,"stopsText":"Nonstop or 1 stop","price":299,"origin":"${origin}","destination":"${destination}"}
-If no flights found, return []. Return ONLY JSON, no markdown. Extract ALL flights, not just the first few.
-
-Data:
-${content_to_parse}`;
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${aiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('AI error:', response.status, errText.slice(0, 500));
-    throw new Error('Failed to parse flights with AI');
-  }
-
-  const data = await response.json();
-  let aiContent = data?.choices?.[0]?.message?.content || '[]';
-  aiContent = aiContent.trim();
-  if (aiContent.startsWith('```')) {
-    aiContent = aiContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
-  try {
-    const flights = JSON.parse(aiContent);
-    return Array.isArray(flights) ? flights : [];
-  } catch {
-    console.error('AI JSON parse failed:', aiContent.slice(0, 500));
-    return [];
-  }
-}
-
-function transformToAppFormat(flight: any, index: number): any {
+function transformFlight(flight: any, index: number, originCode: string, destCode: string): any {
   const price = typeof flight.price === 'number'
     ? flight.price
-    : parseFloat(String(flight.price).replace(/[^0-9.]/g, ''));
+    : parseFloat(String(flight.price || '0').replace(/[^0-9.]/g, ''));
   if (!price || price <= 0) return null;
 
-  return {
-    id: `bd-${index}-${Date.now()}`,
-    price: { raw: price, formatted: `£${Math.round(price)}` },
-    legs: [{
+  const depTime = flight.departure_time || '';
+  const arrTime = flight.arrival_time || '';
+  const durationMin = flight.duration?.raw || 0;
+  const stops = typeof flight.stops === 'number' ? flight.stops : 0;
+  const airlineLogo = flight.airline_logo || '';
+
+  // Build legs from the `flights` array (each segment of the journey)
+  const legs: any[] = [];
+  const segments = flight.flights;
+  if (Array.isArray(segments) && segments.length > 0) {
+    // Collect unique airlines across all segments
+    const airlines = segments.map((s: any) => ({
+      name: s.airline || 'Unknown',
+      logoUrl: s.airline_logo || airlineLogo,
+    }));
+    // Dedupe airlines by name
+    const uniqueAirlines: any[] = [];
+    const seen = new Set<string>();
+    for (const a of airlines) {
+      if (!seen.has(a.name)) { seen.add(a.name); uniqueAirlines.push(a); }
+    }
+
+    const firstSeg = segments[0];
+    const lastSeg = segments[segments.length - 1];
+
+    legs.push({
       origin: {
-        name: flight.origin || '',
-        displayCode: flight.origin || '',
-        city: flight.origin || '',
+        name: firstSeg.departure_airport?.airport_name || originCode,
+        displayCode: firstSeg.departure_airport?.airport_code || originCode,
+        city: firstSeg.departure_airport?.airport_name || originCode,
       },
       destination: {
-        name: flight.destination || '',
-        displayCode: flight.destination || '',
-        city: flight.destination || '',
+        name: lastSeg.arrival_airport?.airport_name || destCode,
+        displayCode: lastSeg.arrival_airport?.airport_code || destCode,
+        city: lastSeg.arrival_airport?.airport_name || destCode,
       },
-      departure: flight.departureTime || '',
-      arrival: flight.arrivalTime || '',
-      durationInMinutes: flight.durationMinutes || 0,
-      carriers: {
-        marketing: [{
-          name: flight.airline || 'Unknown',
-          logoUrl: flight.airlineLogo || '',
-        }],
-      },
-      stopCount: typeof flight.stops === 'number' ? flight.stops : 0,
-    }],
-    isSelfTransfer: false,
+      departure: depTime,
+      arrival: arrTime,
+      durationInMinutes: durationMin,
+      carriers: { marketing: uniqueAirlines },
+      stopCount: stops,
+    });
+  } else {
+    // Fallback
+    legs.push({
+      origin: { name: originCode, displayCode: originCode, city: originCode },
+      destination: { name: destCode, displayCode: destCode, city: destCode },
+      departure: depTime,
+      arrival: arrTime,
+      durationInMinutes: durationMin,
+      carriers: { marketing: [{ name: 'Unknown', logoUrl: airlineLogo }] },
+      stopCount: stops,
+    });
+  }
+
+  return {
+    id: `gf-${index}-${Date.now()}`,
+    price: { raw: price, formatted: `£${Math.round(price)}` },
+    legs,
+    isSelfTransfer: !!flight.self_transfer,
     tags: [],
+    bookingToken: flight.booking_token || null,
   };
 }
 
-// ── Main Handler ──────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -231,6 +99,10 @@ Deno.serve(async (req) => {
       returnDate,
       cabinClass = 'economy',
       adults = 1,
+      children = 0,
+      infants = 0,
+      // Pagination
+      cursor,
     } = body;
 
     const origin = originSkyId || originEntityId;
@@ -243,95 +115,127 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiToken = Deno.env.get('BRIGHTDATA_API_TOKEN');
-    const serpZone = Deno.env.get('BRIGHTDATA_SERP_ZONE');
-    const fallbackZone = Deno.env.get('BRIGHTDATA_ZONE');
-    const aiKey = Deno.env.get('LOVABLE_API_KEY');
-
-    if (!apiToken) {
+    const rapidApiKey = Deno.env.get('RAPIDAPI_KEY');
+    if (!rapidApiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'BrightData credentials not configured', data: [] }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-    if (!aiKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'AI key not configured', data: [] }),
+        JSON.stringify({ success: false, error: 'RapidAPI key not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    console.log(`Flight search: ${origin} → ${destination} on ${date}`);
+    // If we have a cursor (next_token), use getNextFlights
+    if (cursor) {
+      console.log(`Loading more flights with next_token`);
+      const nextUrl = new URL(`https://${API_HOST}/api/v1/getNextFlights`);
+      nextUrl.searchParams.set('next_token', cursor);
+      nextUrl.searchParams.set('currency', 'GBP');
+      nextUrl.searchParams.set('language_code', 'en-US');
+      nextUrl.searchParams.set('country_code', 'GB');
 
-    // Build the tfs parameter and Google Flights URL
-    const tfs = buildTfsParam(origin, destination, date, returnDate, adults, cabinClass);
-    const flightsUrl = `https://www.google.com/travel/flights/search?tfs=${tfs}&gl=uk&hl=en&curr=GBP`;
-    console.log('Google Flights URL:', flightsUrl);
+      const nextResp = await fetch(nextUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-host': API_HOST,
+          'x-rapidapi-key': rapidApiKey,
+        },
+      });
 
-    // Try SERP API first (returns rendered page with all flights), fall back to Web Unlocker
-    const zone = serpZone || fallbackZone;
-    if (!zone) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'BrightData zone not configured', data: [] }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+      if (!nextResp.ok) {
+        const errText = await nextResp.text();
+        console.error('getNextFlights error:', nextResp.status, errText.slice(0, 500));
+        throw new Error(`API error: ${nextResp.status}`);
+      }
 
-    const useSerpApi = !!serpZone;
-    console.log(`Using ${useSerpApi ? 'SERP API' : 'Web Unlocker'} zone: ${zone}`);
+      const nextData = await nextResp.json();
+      console.log('getNextFlights response keys:', Object.keys(nextData));
 
-    const bdResponse = await fetch('https://api.brightdata.com/request', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`,
-      },
-      body: JSON.stringify({
-        zone,
-        url: flightsUrl,
-        format: 'raw',
-      }),
-    });
+      const nextFlightsRaw = extractFlightsFromResponse(nextData);
+      const nextFlights = nextFlightsRaw
+        .map((f: any, i: number) => transformFlight(f, i + 1000, origin, destination))
+        .filter((f: any) => f !== null);
 
-    if (!bdResponse.ok) {
-      const errText = await bdResponse.text();
-      console.error('BrightData error:', bdResponse.status, errText.slice(0, 500));
-      throw new Error(`BrightData API error: ${bdResponse.status}`);
-    }
+      const nextToken = nextData?.data?.next_token || nextData?.next_token || null;
 
-    const html = await bdResponse.text();
-    console.log(`BrightData returned ${html.length} chars`);
-    console.log('Response preview:', html.slice(0, 500));
-
-    if (html.length < 1000) {
-      console.error('Response too small, likely no flight data. Full response:', html);
       return new Response(
         JSON.stringify({
           success: true,
-          data: [],
-          meta: { totalCount: 0, hasNextPage: false, next: null },
+          data: nextFlights,
+          meta: {
+            totalCount: nextFlights.length,
+            hasNextPage: !!nextToken,
+            next: nextToken ? { cursor: nextToken } : null,
+          },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    // Parse flights from HTML using AI
-    const rawFlights = await parseFlightsWithAI(html, aiKey, origin, destination);
-    console.log(`AI extracted ${rawFlights.length} flights`);
+    // Initial search
+    console.log(`Flight search: ${origin} → ${destination} on ${date}`);
 
-    // Transform to app format
+    const searchUrl = new URL(`https://${API_HOST}/api/v1/searchFlights`);
+    searchUrl.searchParams.set('departure_id', origin);
+    searchUrl.searchParams.set('arrival_id', destination);
+    searchUrl.searchParams.set('outbound_date', date);
+    if (returnDate) searchUrl.searchParams.set('return_date', returnDate);
+    searchUrl.searchParams.set('adults', String(adults));
+    if (children > 0) searchUrl.searchParams.set('children', String(children));
+    if (infants > 0) searchUrl.searchParams.set('infant_on_lap', String(infants));
+    searchUrl.searchParams.set('travel_class', CABIN_CLASS_MAP[cabinClass] || 'ECONOMY');
+    searchUrl.searchParams.set('currency', 'GBP');
+    searchUrl.searchParams.set('language_code', 'en-US');
+    searchUrl.searchParams.set('country_code', 'GB');
+    searchUrl.searchParams.set('show_hidden', '1');
+
+    console.log('API URL:', searchUrl.toString());
+
+    const response = await fetch(searchUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': API_HOST,
+        'x-rapidapi-key': rapidApiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('searchFlights error:', response.status, errText.slice(0, 500));
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const apiData = await response.json();
+    console.log('API response status:', apiData.status, 'message:', apiData.message);
+    console.log('API response data keys:', apiData.data ? Object.keys(apiData.data) : 'no data');
+
+    // Log full response structure for debugging
+    if (apiData.data?.itineraries) {
+      const itin = apiData.data.itineraries;
+      if (itin.topFlights) console.log('topFlights count:', itin.topFlights.length);
+      if (itin.otherFlights) console.log('otherFlights count:', itin.otherFlights.length);
+      if (Array.isArray(itin)) console.log('itineraries array count:', itin.length);
+    }
+
+    const rawFlights = extractFlightsFromResponse(apiData);
+    console.log(`Extracted ${rawFlights.length} raw flights`);
+
     const flights = rawFlights
-      .map((f: any, i: number) => transformToAppFormat(f, i))
+      .map((f: any, i: number) => transformFlight(f, i, origin, destination))
       .filter((f: any) => f !== null);
 
     flights.sort((a: any, b: any) => a.price.raw - b.price.raw);
     console.log(`Returning ${flights.length} flights`);
 
+    const nextToken = apiData.data?.next_token || null;
+
     return new Response(
       JSON.stringify({
         success: true,
         data: flights,
-        meta: { totalCount: flights.length, hasNextPage: false, next: null },
+        meta: {
+          totalCount: flights.length,
+          hasNextPage: !!nextToken,
+          next: nextToken ? { cursor: nextToken } : null,
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
@@ -344,3 +248,37 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+function extractFlightsFromResponse(apiData: any): any[] {
+  const flights: any[] = [];
+
+  if (!apiData?.data) return flights;
+  const data = apiData.data;
+
+  // Handle itineraries object with topFlights / otherFlights arrays
+  if (data.itineraries) {
+    const itin = data.itineraries;
+    if (Array.isArray(itin.topFlights)) {
+      flights.push(...itin.topFlights);
+    }
+    if (Array.isArray(itin.otherFlights)) {
+      flights.push(...itin.otherFlights);
+    }
+    // If itineraries is itself an array
+    if (Array.isArray(itin)) {
+      flights.push(...itin);
+    }
+  }
+
+  // If data is directly an array of flights
+  if (Array.isArray(data)) {
+    flights.push(...data);
+  }
+
+  // If data.flights exists
+  if (Array.isArray(data.flights)) {
+    flights.push(...data.flights);
+  }
+
+  return flights;
+}
