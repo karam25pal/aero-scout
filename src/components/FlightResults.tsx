@@ -80,14 +80,13 @@ export const FlightResults = ({
           <h2 className="text-xl font-semibold text-foreground">
             {filteredFlights.length} flight{filteredFlights.length !== 1 ? 's' : ''} found
           </h2>
-          {airlineFilter && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Filtered from {flights.length} total
-            </p>
-          )}
-          {!airlineFilter && typeof totalCount === 'number' && totalCount > flights.length && (
-            <p className="text-sm text-muted-foreground mt-1">Showing {flights.length} of {totalCount}</p>
-          )}
+          <p className="text-sm text-muted-foreground mt-1">
+            {airlineFilter
+              ? `Showing ${filteredFlights.length} of ${flights.length} results`
+              : typeof totalCount === 'number' && totalCount > flights.length
+                ? `Showing ${flights.length} of ${totalCount}`
+                : `${flights.length} total results`}
+          </p>
         </div>
         <Button
           variant={showFilter ? 'default' : 'outline'}
