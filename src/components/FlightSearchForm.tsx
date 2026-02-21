@@ -29,7 +29,7 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
-  const [directOnly, setDirectOnly] = useState(false);
+  
   const [showOriginDropdown, setShowOriginDropdown] = useState(false);
   const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
   const [isSearchingOrigin, setIsSearchingOrigin] = useState(false);
@@ -120,7 +120,7 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
       adults,
       children,
       infants,
-      directOnly,
+      
     });
   };
 
@@ -426,17 +426,7 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
             </SelectContent>
           </Select>
 
-          <button
-            onClick={() => setDirectOnly(!directOnly)}
-            className={cn(
-              "px-4 py-2 rounded-full text-sm font-medium transition-all",
-              directOnly
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-            )}
-          >
-            Direct only
-          </button>
+          
         </div>
       </div>
     </div>
