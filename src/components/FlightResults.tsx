@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FlightCard } from './FlightCard';
-import { Plane, Tag, Filter, Search, X } from 'lucide-react';
+import { Plane, Tag, Filter, Search, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FlightWithDeal } from '@/lib/applyDeals';
@@ -70,6 +70,32 @@ export const FlightResults = ({
 
   if (flights.length === 0) return null;
 
+  const handleDownloadCSV = () => {
+    const headers = ['Airline', 'Origin', 'Destination', 'Departure', 'Arrival', 'Duration (min)', 'Stops', 'Price', 'Deal'];
+    const rows = filteredFlights.map(f => {
+      const leg = f.legs[0];
+      const airline = leg?.carriers?.marketing?.map(c => c.name).join(', ') || '';
+      const origin = `${leg?.origin?.city} (${leg?.origin?.displayCode})`;
+      const dest = `${leg?.destination?.city} (${leg?.destination?.displayCode})`;
+      const departure = leg?.departure || '';
+      const arrival = leg?.arrival || '';
+      const duration = leg?.durationInMinutes || '';
+      const stops = leg?.stopCount ?? '';
+      const price = f.deal?.dealPriceFormatted || f.price?.formatted || '';
+      const deal = f.deal?.title || '';
+      return [airline, origin, dest, departure, arrival, duration, stops, price, deal]
+        .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flight-results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const dealFlights = filteredFlights.filter(f => f.deal);
   const regularFlights = filteredFlights.filter(f => !f.deal);
 
@@ -88,15 +114,26 @@ export const FlightResults = ({
                 : `${flights.length} total results`}
           </p>
         </div>
-        <Button
-          variant={showFilter ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => { setShowFilter(!showFilter); if (showFilter) setAirlineFilter(''); }}
-          className="gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Filter
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadCSV}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button
+            variant={showFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setShowFilter(!showFilter); if (showFilter) setAirlineFilter(''); }}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filter
+          </Button>
+        </div>
       </div>
 
       {/* Airline Filter */}
