@@ -52,4 +52,5 @@ export interface SearchParams {
   adults: number;
   children: number;
   infants: number;
+  directOnly?: boolean;
 }
