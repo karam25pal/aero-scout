@@ -107,31 +107,55 @@ function buildTfsParam(
 }
 
 // ── HTML Flight Parser ──────────────────────────────────────
+function extractFlightDataFromScripts(html: string): string {
+  // Google Flights embeds data in AF_initDataCallback script blocks
+  const dataChunks: string[] = [];
+  const regex = /AF_initDataCallback\(\s*\{[^}]*data:\s*([\s\S]*?)\}\s*\)\s*;/g;
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    const chunk = match[1].trim();
+    if (chunk.length > 100) {
+      dataChunks.push(chunk);
+    }
+  }
+
+  if (dataChunks.length > 0) {
+    console.log(`Found ${dataChunks.length} AF_initDataCallback chunks`);
+    // Join all chunks, truncate to fit AI context
+    let combined = dataChunks.join('\n---CHUNK---\n');
+    if (combined.length > 80000) combined = combined.slice(0, 80000);
+    return combined;
+  }
+
+  // Fallback: extract visible text from body
+  let body = html;
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) body = bodyMatch[1];
+  // Keep script content this time, just remove tags
+  body = body.replace(/<style[\s\S]*?<\/style>/gi, '');
+  body = body.replace(/<link[^>]*>/gi, '');
+  body = body.replace(/<meta[^>]*>/gi, '');
+  body = body.replace(/<[^>]+>/g, ' ');
+  body = body.replace(/\s{2,}/g, ' ');
+  if (body.length > 80000) body = body.slice(0, 80000);
+  return body;
+}
+
 async function parseFlightsWithAI(
   html: string,
   aiKey: string,
   origin: string,
   destination: string,
 ): Promise<any[]> {
-  // Extract body and strip scripts/styles
-  let body = html;
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyMatch) body = bodyMatch[1];
-  body = body.replace(/<script[\s\S]*?<\/script>/gi, '');
-  body = body.replace(/<style[\s\S]*?<\/style>/gi, '');
-  body = body.replace(/<link[^>]*>/gi, '');
-  body = body.replace(/<meta[^>]*>/gi, '');
-  body = body.replace(/\s{2,}/g, ' ');
+  const content_to_parse = extractFlightDataFromScripts(html);
+  console.log(`Sending ${content_to_parse.length} chars to AI for parsing`);
 
-  if (body.length > 80000) body = body.slice(0, 80000);
-  console.log(`Sending ${body.length} chars to AI for parsing`);
-
-  const prompt = `Extract ALL flight results from this Google Flights HTML page. Return ONLY a valid JSON array of flight objects. Each object must have:
+  const prompt = `Extract ALL flight results from this Google Flights page data. The data may be from AF_initDataCallback JavaScript arrays or page text. Return ONLY a valid JSON array of flight objects. Each object must have:
 {"airline":"string","airlineLogo":"string or empty","departureTime":"HH:MM","arrivalTime":"HH:MM","duration":"e.g. 7 hr 30 min","durationMinutes":450,"stops":0,"stopsText":"Nonstop","price":299,"origin":"${origin}","destination":"${destination}"}
 If no flights found, return []. Return ONLY JSON, no markdown.
 
-HTML:
-${body}`;
+Data:
+${content_to_parse}`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -153,16 +177,16 @@ ${body}`;
   }
 
   const data = await response.json();
-  let content = data?.choices?.[0]?.message?.content || '[]';
-  content = content.trim();
-  if (content.startsWith('```')) {
-    content = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  let aiContent = data?.choices?.[0]?.message?.content || '[]';
+  aiContent = aiContent.trim();
+  if (aiContent.startsWith('```')) {
+    aiContent = aiContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   }
   try {
-    const flights = JSON.parse(content);
+    const flights = JSON.parse(aiContent);
     return Array.isArray(flights) ? flights : [];
   } catch {
-    console.error('AI JSON parse failed:', content.slice(0, 500));
+    console.error('AI JSON parse failed:', aiContent.slice(0, 500));
     return [];
   }
 }
@@ -265,7 +289,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         zone,
-        url: flightsUrl + '&brd_json=0',
+        url: flightsUrl,
         format: 'raw',
       }),
     });
