@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
       infants = 0,
       // Pagination
       cursor,
+      directOnly,
     } = body;
 
     const origin = originSkyId || originEntityId;
@@ -186,6 +187,7 @@ Deno.serve(async (req) => {
     searchUrl.searchParams.set('language_code', 'en-US');
     searchUrl.searchParams.set('country_code', 'GB');
     searchUrl.searchParams.set('show_hidden', '1');
+    if (directOnly) searchUrl.searchParams.set('stops', '0');
 
     console.log('API URL:', searchUrl.toString());
 
