@@ -11,49 +11,45 @@ interface TransformedFlight {
   tags: string[];
 }
 
-function transformSerpApiFlight(flight: any, index: number, departureId: string, arrivalId: string): TransformedFlight | null {
+function transformItinerary(itinerary: any): TransformedFlight | null {
   try {
-    const price = flight?.price;
+    const price = itinerary?.price?.raw;
     if (typeof price !== 'number' || price <= 0) return null;
 
-    const segments = flight?.flights || [];
-    if (segments.length === 0) return null;
-
-    const firstSeg = segments[0];
-    const lastSeg = segments[segments.length - 1];
-    const totalDuration = flight?.total_duration || 0;
-
-    const journeyLeg = {
+    const legs = (itinerary?.legs || []).map((leg: any) => ({
       origin: {
-        name: firstSeg?.departure_airport?.name || departureId,
-        displayCode: firstSeg?.departure_airport?.id || departureId,
-        city: firstSeg?.departure_airport?.name || departureId,
+        name: leg?.origin?.name || '',
+        displayCode: leg?.origin?.displayCode || '',
+        city: leg?.origin?.city || '',
       },
       destination: {
-        name: lastSeg?.arrival_airport?.name || arrivalId,
-        displayCode: lastSeg?.arrival_airport?.id || arrivalId,
-        city: lastSeg?.arrival_airport?.name || arrivalId,
+        name: leg?.destination?.name || '',
+        displayCode: leg?.destination?.displayCode || '',
+        city: leg?.destination?.city || '',
       },
-      departure: firstSeg?.departure_airport?.time || '',
-      arrival: lastSeg?.arrival_airport?.time || '',
-      durationInMinutes: totalDuration,
+      departure: leg?.departure || '',
+      arrival: leg?.arrival || '',
+      durationInMinutes: leg?.durationInMinutes || 0,
       carriers: {
-        marketing: segments.map((s: any) => ({
-          name: s?.airline || '',
-          logoUrl: s?.airline_logo || '',
-        })).filter((c: any, i: number, arr: any[]) =>
-          arr.findIndex((x: any) => x.name === c.name) === i
-        ),
+        marketing: (leg?.carriers?.marketing || []).map((c: any) => ({
+          name: c?.name || '',
+          logoUrl: c?.logoUrl || '',
+        })),
       },
-      stopCount: segments.length - 1,
-    };
+      stopCount: leg?.stopCount ?? 0,
+    }));
+
+    if (legs.length === 0) return null;
 
     return {
-      id: `serp-${index}-${Date.now()}`,
-      price: { raw: price, formatted: `£${price}` },
-      legs: [journeyLeg],
-      isSelfTransfer: false,
-      tags: flight?.type ? [flight.type] : [],
+      id: itinerary?.id || `sky-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      price: {
+        raw: price,
+        formatted: itinerary?.price?.formatted || `£${price}`,
+      },
+      legs,
+      isSelfTransfer: itinerary?.isSelfTransfer ?? false,
+      tags: itinerary?.tags || [],
     };
   } catch {
     return null;
@@ -76,71 +72,75 @@ Deno.serve(async (req) => {
       returnDate,
       cabinClass = 'economy',
       adults = 1,
+      children = 0,
+      infants = 0,
     } = body;
 
-    const departureId = originSkyId || originEntityId;
-    const arrivalId = destinationSkyId || destinationEntityId;
-
-    if (!departureId || !arrivalId || !date) {
+    if (!originSkyId || !destinationSkyId || !originEntityId || !destinationEntityId || !date) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing required parameters', data: [] }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const apiKey = Deno.env.get('SERPAPI_KEY');
+    const apiKey = Deno.env.get('RAPIDAPI_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'SerpApi key not configured', data: [] }),
+        JSON.stringify({ success: false, error: 'RapidAPI key not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build SerpApi Google Flights URL
+    // Build Sky Scrapper API URL
     const params = new URLSearchParams({
-      engine: 'google_flights',
-      api_key: apiKey,
-      departure_id: departureId,
-      arrival_id: arrivalId,
-      outbound_date: date,
-      currency: 'GBP',
-      hl: 'en',
-      gl: 'uk',
+      originSkyId,
+      destinationSkyId,
+      originEntityId,
+      destinationEntityId,
+      date,
       adults: String(adults),
-      type: returnDate ? '1' : '2', // 1=round trip, 2=one way
+      cabinClass,
+      currency: 'GBP',
+      market: 'UK',
+      countryCode: 'UK',
     });
 
-    if (returnDate) {
-      params.set('return_date', returnDate);
-    }
+    if (returnDate) params.set('returnDate', returnDate);
+    if (children > 0) params.set('childrens', String(children));
+    if (infants > 0) params.set('infants', String(infants));
 
-    // Map cabin class
-    const cabinMap: Record<string, string> = { economy: '1', premium_economy: '2', business: '3', first: '4' };
-    params.set('travel_class', cabinMap[cabinClass] || '1');
+    const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchFlights?${params.toString()}`;
+    console.log(`Sky Scrapper search: ${originSkyId} → ${destinationSkyId} on ${date}`);
 
-    const serpUrl = `https://serpapi.com/search.json?${params.toString()}`;
-    console.log(`SerpApi flight search: ${departureId} → ${arrivalId} on ${date}`);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
+        'x-rapidapi-key': apiKey,
+      },
+    });
 
-    const response = await fetch(serpUrl);
     const data = await response.json();
 
-    if (data?.error) {
-      console.error('SerpApi error:', data.error);
-      throw new Error(`SerpApi error: ${data.error}`);
+    if (!response.ok) {
+      console.error('Sky Scrapper API error:', response.status, JSON.stringify(data).slice(0, 500));
+      throw new Error(`Sky Scrapper API error: ${response.status}`);
     }
 
-    // Combine best_flights and other_flights
-    const bestFlights = data?.best_flights || [];
-    const otherFlights = data?.other_flights || [];
-    const allFlights = [...bestFlights, ...otherFlights];
+    if (!data?.status) {
+      console.error('Sky Scrapper returned error:', JSON.stringify(data).slice(0, 500));
+      throw new Error(data?.message || 'Sky Scrapper search failed');
+    }
 
-    console.log(`SerpApi returned ${bestFlights.length} best + ${otherFlights.length} other = ${allFlights.length} flights`);
+    // Extract itineraries from response
+    const itineraries = data?.data?.itineraries || [];
+    console.log(`Sky Scrapper returned ${itineraries.length} itineraries`);
 
-    const flights = allFlights
-      .map((f: any, i: number) => transformSerpApiFlight(f, i, departureId, arrivalId))
+    const flights = itineraries
+      .map((it: any) => transformItinerary(it))
       .filter((f: TransformedFlight | null): f is TransformedFlight => f !== null);
 
-    flights.sort((a, b) => a.price.raw - b.price.raw);
+    flights.sort((a: TransformedFlight, b: TransformedFlight) => a.price.raw - b.price.raw);
 
     console.log(`Returning ${flights.length} flights`);
 
