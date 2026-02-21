@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
     searchUrl.searchParams.set('language_code', 'en-US');
     searchUrl.searchParams.set('country_code', 'GB');
     searchUrl.searchParams.set('show_hidden', '1');
-    if (directOnly) searchUrl.searchParams.set('stops', '0');
+    if (directOnly) searchUrl.searchParams.set('stops', '1');
 
     console.log('API URL:', searchUrl.toString());
 
