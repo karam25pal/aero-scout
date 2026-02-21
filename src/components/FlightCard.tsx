@@ -3,6 +3,7 @@ import { FlightResult } from '@/types/flight';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FlightWithDeal } from '@/lib/applyDeals';
+import { LayoverMap } from '@/components/LayoverMap';
 
 interface FlightCardProps {
   flight: FlightWithDeal;
@@ -95,6 +96,13 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
             <ArrowRight className="h-4 w-4 text-muted-foreground mx-2" />
             <span className="text-muted-foreground">{leg.destination.city}</span>
           </div>
+          {leg.stopCount > 0 && leg.layovers && leg.layovers.length > 0 && (
+            <LayoverMap
+              originCode={leg.origin.displayCode}
+              destinationCode={leg.destination.displayCode}
+              layovers={leg.layovers}
+            />
+          )}
         </div>
 
         {/* Price & Book */}
@@ -177,6 +185,13 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
                 <ArrowRight className="h-4 w-4 text-muted-foreground mx-2" />
                 <span className="text-muted-foreground">{flight.legs[1].destination.city}</span>
               </div>
+              {flight.legs[1].stopCount > 0 && flight.legs[1].layovers && flight.legs[1].layovers.length > 0 && (
+                <LayoverMap
+                  originCode={flight.legs[1].origin.displayCode}
+                  destinationCode={flight.legs[1].destination.displayCode}
+                  layovers={flight.legs[1].layovers}
+                />
+              )}
             </div>
             <div className="lg:w-40" />
           </div>

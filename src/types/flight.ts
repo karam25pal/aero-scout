@@ -7,6 +7,22 @@ export interface Airport {
   iata: string;
 }
 
+export interface FlightSegment {
+  airportCode: string;
+  airportName: string;
+  departure: string;
+  arrival: string;
+  durationMinutes: number;
+  airline: string;
+  airlineLogo: string;
+}
+
+export interface LayoverInfo {
+  airportCode: string;
+  airportName: string;
+  durationMinutes: number;
+}
+
 export interface FlightLeg {
   origin: {
     name: string;
@@ -28,6 +44,8 @@ export interface FlightLeg {
     }[];
   };
   stopCount: number;
+  segments?: FlightSegment[];
+  layovers?: LayoverInfo[];
 }
 
 export interface FlightResult {

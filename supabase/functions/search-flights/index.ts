@@ -43,6 +43,35 @@ function transformFlight(flight: any, index: number, originCode: string, destCod
     const firstSeg = segments[0];
     const lastSeg = segments[segments.length - 1];
 
+    // Build segments and layovers
+    const segmentDetails = segments.map((s: any) => ({
+      airportCode: s.departure_airport?.airport_code || '',
+      airportName: s.departure_airport?.airport_name || '',
+      departure: s.departure_time || '',
+      arrival: s.arrival_time || '',
+      durationMinutes: s.duration?.raw || 0,
+      airline: s.airline || 'Unknown',
+      airlineLogo: s.airline_logo || '',
+    }));
+
+    const layoverList: any[] = [];
+    for (let i = 0; i < segments.length - 1; i++) {
+      const arrTime2 = segments[i].arrival_time || '';
+      const depTime2 = segments[i + 1].departure_time || '';
+      const layoverAirport = segments[i].arrival_airport;
+      let layoverMin = 0;
+      if (arrTime2 && depTime2) {
+        const a = new Date(arrTime2).getTime();
+        const d = new Date(depTime2).getTime();
+        if (!isNaN(a) && !isNaN(d)) layoverMin = Math.round((d - a) / 60000);
+      }
+      layoverList.push({
+        airportCode: layoverAirport?.airport_code || '',
+        airportName: layoverAirport?.airport_name || '',
+        durationMinutes: layoverMin,
+      });
+    }
+
     legs.push({
       origin: {
         name: firstSeg.departure_airport?.airport_name || originCode,
@@ -59,6 +88,8 @@ function transformFlight(flight: any, index: number, originCode: string, destCod
       durationInMinutes: durationMin,
       carriers: { marketing: uniqueAirlines },
       stopCount: stops,
+      segments: segmentDetails,
+      layovers: layoverList,
     });
   } else {
     // Fallback
