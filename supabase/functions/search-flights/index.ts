@@ -11,92 +11,53 @@ interface TransformedFlight {
   tags: string[];
 }
 
-function parseDuration(durationStr: string): number {
-  // "6 hr 51 min" -> minutes
-  const hrMatch = durationStr?.match(/(\d+)\s*hr/);
-  const minMatch = durationStr?.match(/(\d+)\s*min/);
-  return (hrMatch ? parseInt(hrMatch[1]) * 60 : 0) + (minMatch ? parseInt(minMatch[1]) : 0);
-}
-
-function parsePrice(priceStr: string): number | null {
-  if (!priceStr) return null;
-  const cleaned = priceStr.replace(/[^0-9.,]/g, '').replace(',', '');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
-}
-
-function transformBrightDataFlight(flight: any, index: number): TransformedFlight | null {
+function transformSerpApiFlight(flight: any, index: number, departureId: string, arrivalId: string): TransformedFlight | null {
   try {
-    const price = parsePrice(flight?.price);
-    if (price === null) return null;
+    const price = flight?.price;
+    if (typeof price !== 'number' || price <= 0) return null;
 
-    const airline = flight?.airline || '';
-    const departureTime = flight?.departure_time || '';
-    const arrivalTime = flight?.arrival_time || '';
-    const duration = parseDuration(flight?.duration || '');
-    const stops = flight?.stops || 'Nonstop';
-    const stopCount = stops === 'Nonstop' ? 0 : parseInt(stops) || (stops.includes('stop') ? 1 : 0);
+    const segments = flight?.flights || [];
+    if (segments.length === 0) return null;
 
-    // Extract airport codes from additional fields if available
-    const depAirport = flight?.departure_airport || '';
-    const arrAirport = flight?.arrival_airport || '';
+    const firstSeg = segments[0];
+    const lastSeg = segments[segments.length - 1];
+    const totalDuration = flight?.total_duration || 0;
 
     const journeyLeg = {
       origin: {
-        name: depAirport || 'Departure',
-        displayCode: depAirport || '',
-        city: depAirport || '',
+        name: firstSeg?.departure_airport?.name || departureId,
+        displayCode: firstSeg?.departure_airport?.id || departureId,
+        city: firstSeg?.departure_airport?.name || departureId,
       },
       destination: {
-        name: arrAirport || 'Arrival',
-        displayCode: arrAirport || '',
-        city: arrAirport || '',
+        name: lastSeg?.arrival_airport?.name || arrivalId,
+        displayCode: lastSeg?.arrival_airport?.id || arrivalId,
+        city: lastSeg?.arrival_airport?.name || arrivalId,
       },
-      departure: departureTime,
-      arrival: arrivalTime,
-      durationInMinutes: duration,
+      departure: firstSeg?.departure_airport?.time || '',
+      arrival: lastSeg?.arrival_airport?.time || '',
+      durationInMinutes: totalDuration,
       carriers: {
-        marketing: [{
-          name: airline,
-          logoUrl: flight?.airline_logo || '',
-        }],
+        marketing: segments.map((s: any) => ({
+          name: s?.airline || '',
+          logoUrl: s?.airline_logo || '',
+        })).filter((c: any, i: number, arr: any[]) =>
+          arr.findIndex((x: any) => x.name === c.name) === i
+        ),
       },
-      stopCount,
+      stopCount: segments.length - 1,
     };
 
     return {
-      id: `bd-${index}-${Date.now()}`,
-      price: {
-        raw: price,
-        formatted: `£${price}`,
-      },
+      id: `serp-${index}-${Date.now()}`,
+      price: { raw: price, formatted: `£${price}` },
       legs: [journeyLeg],
       isSelfTransfer: false,
-      tags: [],
+      tags: flight?.type ? [flight.type] : [],
     };
   } catch {
     return null;
   }
-}
-
-function buildGoogleFlightsUrl(
-  departureId: string,
-  arrivalId: string,
-  date: string,
-  returnDate?: string,
-): string {
-  // Use the simple Google Flights URL format with query
-  const tripType = returnDate ? 'round trip' : 'one way';
-  let q = `flights from ${departureId} to ${arrivalId} on ${date}`;
-  if (returnDate) {
-    q += ` return ${returnDate}`;
-  }
-  const url = new URL('https://www.google.com/travel/flights');
-  url.searchParams.set('q', q);
-  url.searchParams.set('curr', 'GBP');
-  url.searchParams.set('hl', 'en');
-  url.searchParams.set('gl', 'uk');
-  return url.toString();
 }
 
 Deno.serve(async (req) => {
@@ -127,111 +88,56 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiToken = Deno.env.get('BRIGHTDATA_API_TOKEN');
-    const zone = Deno.env.get('BRIGHTDATA_ZONE');
-    if (!apiToken || !zone) {
+    const apiKey = Deno.env.get('SERPAPI_KEY');
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'BrightData credentials not configured', data: [] }),
+        JSON.stringify({ success: false, error: 'SerpApi key not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const flightsUrl = buildGoogleFlightsUrl(departureId, arrivalId, date, returnDate);
-    console.log(`Searching flights via BrightData: ${departureId} → ${arrivalId} on ${date}`);
-    console.log(`Google Flights URL: ${flightsUrl}`);
-
-    const response = await fetch('https://api.brightdata.com/request', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`,
-      },
-      body: JSON.stringify({
-        zone,
-        url: flightsUrl,
-        format: 'raw',
-      }),
+    // Build SerpApi Google Flights URL
+    const params = new URLSearchParams({
+      engine: 'google_flights',
+      api_key: apiKey,
+      departure_id: departureId,
+      arrival_id: arrivalId,
+      outbound_date: date,
+      currency: 'GBP',
+      hl: 'en',
+      gl: 'uk',
+      adults: String(adults),
+      type: returnDate ? '1' : '2', // 1=round trip, 2=one way
     });
 
-    const responseText = await response.text();
-    console.log(`BrightData response status: ${response.status}, length: ${responseText.length}`);
-
-    if (!response.ok) {
-      console.error('BrightData error:', responseText.substring(0, 1000));
-      throw new Error(`BrightData request failed (${response.status}): ${responseText.substring(0, 200)}`);
+    if (returnDate) {
+      params.set('return_date', returnDate);
     }
 
-    let data: any;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      console.log('BrightData returned non-JSON (first 2000 chars):', responseText.substring(0, 2000));
-      throw new Error('BrightData returned non-JSON response. Try setting format to json in zone settings.');
+    // Map cabin class
+    const cabinMap: Record<string, string> = { economy: '1', premium_economy: '2', business: '3', first: '4' };
+    params.set('travel_class', cabinMap[cabinClass] || '1');
+
+    const serpUrl = `https://serpapi.com/search.json?${params.toString()}`;
+    console.log(`SerpApi flight search: ${departureId} → ${arrivalId} on ${date}`);
+
+    const response = await fetch(serpUrl);
+    const data = await response.json();
+
+    if (data?.error) {
+      console.error('SerpApi error:', data.error);
+      throw new Error(`SerpApi error: ${data.error}`);
     }
 
-    console.log('BrightData response keys:', Object.keys(data));
+    // Combine best_flights and other_flights
+    const bestFlights = data?.best_flights || [];
+    const otherFlights = data?.other_flights || [];
+    const allFlights = [...bestFlights, ...otherFlights];
 
-    // BrightData parsed Google Flights data may come in various formats
-    // Try to extract flight data from the response
-    let rawFlights: any[] = [];
+    console.log(`SerpApi returned ${bestFlights.length} best + ${otherFlights.length} other = ${allFlights.length} flights`);
 
-    if (Array.isArray(data?.flights)) {
-      rawFlights = data.flights;
-    } else if (Array.isArray(data?.best_flights)) {
-      rawFlights = [...(data.best_flights || []), ...(data.other_flights || [])];
-    } else if (Array.isArray(data?.results)) {
-      rawFlights = data.results;
-    } else if (Array.isArray(data)) {
-      rawFlights = data;
-    } else {
-      // Log the full response structure to debug
-      console.log('BrightData full response (first 2000 chars):', JSON.stringify(data).substring(0, 2000));
-      // Try to find any array in the response that looks like flights
-      for (const key of Object.keys(data || {})) {
-        if (Array.isArray(data[key]) && data[key].length > 0) {
-          const sample = data[key][0];
-          if (sample?.price || sample?.airline || sample?.departure_time) {
-            rawFlights = data[key];
-            console.log(`Found flights under key: ${key}`);
-            break;
-          }
-        }
-      }
-    }
-
-    console.log(`Found ${rawFlights.length} raw flight entries`);
-
-    // If rawFlights items have nested flights array (like SerpApi format), flatten
-    const flatFlights: any[] = [];
-    for (const item of rawFlights) {
-      if (Array.isArray(item?.flights)) {
-        // SerpApi-like format with nested flights and group price
-        const price = item.price;
-        const totalDuration = item.total_duration;
-        const flights = item.flights;
-        flatFlights.push({
-          airline: flights[0]?.airline || '',
-          airline_logo: flights[0]?.airline_logo || '',
-          departure_time: flights[0]?.departure_airport?.time || flights[0]?.departure_time || '',
-          arrival_time: flights[flights.length - 1]?.arrival_airport?.time || flights[flights.length - 1]?.arrival_time || '',
-          departure_airport: flights[0]?.departure_airport?.id || departureId,
-          arrival_airport: flights[flights.length - 1]?.arrival_airport?.id || arrivalId,
-          duration: totalDuration ? `${Math.floor(totalDuration / 60)} hr ${totalDuration % 60} min` : '',
-          stops: flights.length > 1 ? `${flights.length - 1} stop` : 'Nonstop',
-          price: typeof price === 'number' ? `£${price}` : (price || ''),
-        });
-      } else {
-        // Already flat flight data
-        flatFlights.push({
-          ...item,
-          departure_airport: item.departure_airport || departureId,
-          arrival_airport: item.arrival_airport || arrivalId,
-        });
-      }
-    }
-
-    const flights = flatFlights
-      .map((f: any, i: number) => transformBrightDataFlight(f, i))
+    const flights = allFlights
+      .map((f: any, i: number) => transformSerpApiFlight(f, i, departureId, arrivalId))
       .filter((f: TransformedFlight | null): f is TransformedFlight => f !== null);
 
     flights.sort((a, b) => a.price.raw - b.price.raw);
