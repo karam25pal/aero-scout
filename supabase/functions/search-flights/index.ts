@@ -3,8 +3,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const API_HOST = 'flights-sky.p.rapidapi.com';
-
 interface TransformedFlight {
   id: string;
   price: { raw: number; formatted: string };
@@ -13,44 +11,67 @@ interface TransformedFlight {
   tags: string[];
 }
 
-function transformItinerary(itinerary: any): TransformedFlight | null {
+function transformSerpApiFlight(flightGroup: any, index: number): TransformedFlight | null {
   try {
-    const price = itinerary?.price;
-    const legs = itinerary?.legs || [];
+    const flights = flightGroup?.flights || [];
+    const price = flightGroup?.price;
+
+    if (!flights.length || price === undefined) return null;
+
+    const legs = flights.map((flight: any) => ({
+      origin: {
+        name: flight?.departure_airport?.name || '',
+        displayCode: flight?.departure_airport?.id || '',
+        city: flight?.departure_airport?.name?.split(' ')[0] || '',
+      },
+      destination: {
+        name: flight?.arrival_airport?.name || '',
+        displayCode: flight?.arrival_airport?.id || '',
+        city: flight?.arrival_airport?.name?.split(' ')[0] || '',
+      },
+      departure: flight?.departure_airport?.time || '',
+      arrival: flight?.arrival_airport?.time || '',
+      durationInMinutes: flight?.duration || 0,
+      carriers: {
+        marketing: [{
+          name: flight?.airline || '',
+          logoUrl: flight?.airline_logo || '',
+        }],
+      },
+      stopCount: flight?.stops || 0,
+    }));
+
+    // Use the total_duration from the group if available, otherwise sum legs
+    const totalDuration = flightGroup?.total_duration || legs.reduce((sum: number, l: any) => sum + l.durationInMinutes, 0);
+
+    // Build a single "journey leg" if there are multiple flight segments (connections)
+    // Our frontend expects legs = journey legs (outbound, return), not individual flight segments
+    const journeyLeg = {
+      origin: legs[0].origin,
+      destination: legs[legs.length - 1].destination,
+      departure: legs[0].departure,
+      arrival: legs[legs.length - 1].arrival,
+      durationInMinutes: totalDuration,
+      carriers: {
+        marketing: flights.map((f: any) => ({
+          name: f?.airline || '',
+          logoUrl: f?.airline_logo || '',
+        })).filter((c: any, i: number, arr: any[]) =>
+          arr.findIndex((x: any) => x.name === c.name) === i
+        ),
+      },
+      stopCount: flights.length - 1,
+    };
 
     return {
-      id: itinerary?.id || Math.random().toString(36),
+      id: `serpapi-${index}-${Date.now()}`,
       price: {
-        raw: price?.raw || 0,
-        formatted: price?.formatted || `£${price?.raw || 0}`,
+        raw: price,
+        formatted: `£${price}`,
       },
-      legs: legs.map((leg: any) => {
-        const carriers = leg?.carriers?.marketing || [];
-        return {
-          origin: {
-            name: leg?.origin?.name || '',
-            displayCode: leg?.origin?.displayCode || '',
-            city: leg?.origin?.city || '',
-          },
-          destination: {
-            name: leg?.destination?.name || '',
-            displayCode: leg?.destination?.displayCode || '',
-            city: leg?.destination?.city || '',
-          },
-          departure: leg?.departure || '',
-          arrival: leg?.arrival || '',
-          durationInMinutes: leg?.durationInMinutes || 0,
-          carriers: {
-            marketing: carriers.map((c: any) => ({
-              name: c?.name || '',
-              logoUrl: c?.logoUrl || '',
-            })),
-          },
-          stopCount: leg?.stopCount || 0,
-        };
-      }),
-      isSelfTransfer: itinerary?.isSelfTransfer || false,
-      tags: itinerary?.tags || [],
+      legs: [journeyLeg],
+      isSelfTransfer: false,
+      tags: flightGroup?.type ? [flightGroup.type] : [],
     };
   } catch {
     return null;
@@ -77,109 +98,81 @@ Deno.serve(async (req) => {
       infants = 0,
     } = body;
 
-    // Use skyId for the flights-sky API (e.g. "LHR", "NYCA"), not the base64 entityId
-    const fromId = originSkyId || originEntityId;
-    const toId = destinationSkyId || destinationEntityId;
+    const departureId = originSkyId || originEntityId;
+    const arrivalId = destinationSkyId || destinationEntityId;
 
-    if (!fromId || !toId || !date) {
+    if (!departureId || !arrivalId || !date) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing required parameters', data: [] }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const apiKey = Deno.env.get('RAPIDAPI_KEY');
+    const apiKey = Deno.env.get('SERPAPI_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'API key not configured', data: [] }),
+        JSON.stringify({ success: false, error: 'SerpApi key not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Choose endpoint based on trip type
-    const isRoundTrip = !!returnDate;
-    const endpoint = isRoundTrip ? 'flights/search-roundtrip' : 'flights/search-one-way';
+    // Map cabin class to SerpApi format
+    const cabinMap: Record<string, string> = {
+      economy: '1',
+      premium_economy: '2',
+      business: '3',
+      first: '4',
+    };
 
-    const url = new URL(`https://${API_HOST}/${endpoint}`);
-    url.searchParams.set('fromEntityId', fromId);
-    url.searchParams.set('toEntityId', toId);
-    url.searchParams.set('departDate', date);
-    if (isRoundTrip) url.searchParams.set('returnDate', returnDate);
+    const url = new URL('https://serpapi.com/search');
+    url.searchParams.set('engine', 'google_flights');
+    url.searchParams.set('departure_id', departureId);
+    url.searchParams.set('arrival_id', arrivalId);
+    url.searchParams.set('outbound_date', date);
+    if (returnDate) {
+      url.searchParams.set('return_date', returnDate);
+      url.searchParams.set('type', '1'); // round trip
+    } else {
+      url.searchParams.set('type', '2'); // one way
+    }
+    url.searchParams.set('travel_class', cabinMap[cabinClass] || '1');
     url.searchParams.set('adults', String(adults));
     if (children > 0) url.searchParams.set('children', String(children));
-    if (infants > 0) url.searchParams.set('infants', String(infants));
-    url.searchParams.set('cabinClass', cabinClass.toLowerCase());
+    if (infants > 0) url.searchParams.set('infants_in_seat', String(infants));
     url.searchParams.set('currency', 'GBP');
-    url.searchParams.set('market', 'UK');
-    url.searchParams.set('locale', 'en-GB');
+    url.searchParams.set('hl', 'en');
+    url.searchParams.set('gl', 'uk');
+    url.searchParams.set('api_key', apiKey);
 
-    console.log(`Searching flights: ${url.toString()}`);
+    console.log(`Searching flights via SerpApi: ${departureId} → ${arrivalId} on ${date}`);
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-host': API_HOST,
-        'x-rapidapi-key': apiKey,
-      },
-    });
-
+    const response = await fetch(url.toString());
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('flights-sky API error:', JSON.stringify(data));
-      throw new Error(data?.message || 'API request failed');
+      console.error('SerpApi error:', JSON.stringify(data));
+      throw new Error(data?.error || 'SerpApi request failed');
     }
 
-    const context = data?.data?.context;
-    const status = context?.status;
-    
-    // The itineraries can be an array directly, or have a .results property, or be array-like with numeric keys
-    const rawItineraries = data?.data?.itineraries;
-    let itineraries: any[] = [];
-    if (Array.isArray(rawItineraries)) {
-      itineraries = rawItineraries;
-    } else if (rawItineraries?.results && Array.isArray(rawItineraries.results)) {
-      itineraries = rawItineraries.results;
-    } else if (rawItineraries && typeof rawItineraries === 'object') {
-      // Array-like object with numeric keys
-      itineraries = Object.values(rawItineraries).filter((v: any) => v && typeof v === 'object' && v.id);
+    if (data?.error) {
+      console.error('SerpApi returned error:', data.error);
+      throw new Error(data.error);
     }
 
-    console.log(`Initial search returned ${itineraries.length} itineraries, status: ${status}`);
+    // Combine best_flights and other_flights
+    const bestFlights = data?.best_flights || [];
+    const otherFlights = data?.other_flights || [];
+    const allFlightGroups = [...bestFlights, ...otherFlights];
 
-    // If incomplete, poll for full results (max 3 attempts)
-    if (status === 'incomplete' && context?.sessionId) {
-      const sessionId = context.sessionId;
-      for (let i = 0; i < 3; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const incUrl = new URL(`https://${API_HOST}/flights/search-incomplete`);
-        incUrl.searchParams.set('sessionId', sessionId);
-
-        console.log(`Polling incomplete results, attempt ${i + 1}`);
-        const incRes = await fetch(incUrl.toString(), {
-          method: 'GET',
-          headers: { 'x-rapidapi-host': API_HOST, 'x-rapidapi-key': apiKey },
-        });
-        const incData = await incRes.json();
-        const newStatus = incData?.data?.context?.status;
-        const rawInc = incData?.data?.itineraries;
-        let newItineraries: any[] = [];
-        if (Array.isArray(rawInc)) newItineraries = rawInc;
-        else if (rawInc?.results && Array.isArray(rawInc.results)) newItineraries = rawInc.results;
-        else if (rawInc && typeof rawInc === 'object') newItineraries = Object.values(rawInc).filter((v: any) => v && typeof v === 'object' && v.id);
-        if (newItineraries.length > 0) itineraries = newItineraries;
-        console.log(`Poll ${i + 1}: ${newItineraries.length} itineraries, status: ${newStatus}`);
-        if (newStatus === 'complete') break;
-      }
-    }
+    console.log(`SerpApi returned ${bestFlights.length} best + ${otherFlights.length} other flights`);
 
     // Transform to our format
-    const flights = itineraries
-      .map((it: any) => transformItinerary(it))
+    const flights = allFlightGroups
+      .map((fg: any, i: number) => transformSerpApiFlight(fg, i))
       .filter((f: TransformedFlight | null): f is TransformedFlight => f !== null);
 
     // Sort by price
-    flights.sort((a: TransformedFlight, b: TransformedFlight) => a.price.raw - b.price.raw);
+    flights.sort((a, b) => a.price.raw - b.price.raw);
 
     console.log(`Returning ${flights.length} flights`);
 
