@@ -70,6 +70,17 @@ export const FlightResults = ({
 
   if (flights.length === 0) return null;
 
+  const handleDownloadJSON = () => {
+    const json = JSON.stringify(filteredFlights, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flight-results.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadCSV = () => {
     const headers = ['Airline', 'Origin', 'Destination', 'Departure', 'Arrival', 'Duration (min)', 'Stops', 'Price', 'Deal'];
     const rows = filteredFlights.map(f => {
@@ -115,6 +126,15 @@ export const FlightResults = ({
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadJSON}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            JSON
+          </Button>
           <Button
             variant="outline"
             size="sm"
