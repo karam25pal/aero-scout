@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         zone,
-        url: flightsUrl,
+        url: flightsUrl + '&brd_json=0',
         format: 'raw',
       }),
     });
