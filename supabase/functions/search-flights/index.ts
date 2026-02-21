@@ -121,23 +121,23 @@ function extractFlightDataFromScripts(html: string): string {
 
   if (dataChunks.length > 0) {
     console.log(`Found ${dataChunks.length} AF_initDataCallback chunks`);
-    // Join all chunks, truncate to fit AI context
+    // Sort by size descending - largest chunks likely contain flight data
+    dataChunks.sort((a, b) => b.length - a.length);
     let combined = dataChunks.join('\n---CHUNK---\n');
-    if (combined.length > 80000) combined = combined.slice(0, 80000);
+    if (combined.length > 200000) combined = combined.slice(0, 200000);
     return combined;
   }
 
-  // Fallback: extract visible text from body
+  // Fallback: extract visible text from body  
   let body = html;
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   if (bodyMatch) body = bodyMatch[1];
-  // Keep script content this time, just remove tags
   body = body.replace(/<style[\s\S]*?<\/style>/gi, '');
   body = body.replace(/<link[^>]*>/gi, '');
   body = body.replace(/<meta[^>]*>/gi, '');
   body = body.replace(/<[^>]+>/g, ' ');
   body = body.replace(/\s{2,}/g, ' ');
-  if (body.length > 80000) body = body.slice(0, 80000);
+  if (body.length > 200000) body = body.slice(0, 200000);
   return body;
 }
 
@@ -150,9 +150,9 @@ async function parseFlightsWithAI(
   const content_to_parse = extractFlightDataFromScripts(html);
   console.log(`Sending ${content_to_parse.length} chars to AI for parsing`);
 
-  const prompt = `Extract ALL flight results from this Google Flights page data. The data may be from AF_initDataCallback JavaScript arrays or page text. Return ONLY a valid JSON array of flight objects. Each object must have:
-{"airline":"string","airlineLogo":"string or empty","departureTime":"HH:MM","arrivalTime":"HH:MM","duration":"e.g. 7 hr 30 min","durationMinutes":450,"stops":0,"stopsText":"Nonstop","price":299,"origin":"${origin}","destination":"${destination}"}
-If no flights found, return []. Return ONLY JSON, no markdown.
+  const prompt = `Extract ALL flight results from this Google Flights page data. The data is from AF_initDataCallback JavaScript arrays. Look for arrays containing flight information: airline names, departure/arrival times, prices, durations, number of stops. Extract EVERY single flight - do not skip any. Return ONLY a valid JSON array of flight objects. Each object must have:
+{"airline":"string","airlineLogo":"string or empty","departureTime":"HH:MM","arrivalTime":"HH:MM","duration":"e.g. 7 hr 30 min","durationMinutes":450,"stops":0,"stopsText":"Nonstop or 1 stop","price":299,"origin":"${origin}","destination":"${destination}"}
+If no flights found, return []. Return ONLY JSON, no markdown. Extract ALL flights, not just the first few.
 
 Data:
 ${content_to_parse}`;
