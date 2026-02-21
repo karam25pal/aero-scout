@@ -15,7 +15,12 @@ const formatDuration = (minutes: number): string => {
 };
 
 const formatTime = (dateString: string): string => {
+  if (!dateString) return '--:--';
+  // If it's already a short time like "22:05", return as-is
+  if (/^\d{1,2}:\d{2}$/.test(dateString)) return dateString;
+  // Otherwise try parsing as a full date
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
