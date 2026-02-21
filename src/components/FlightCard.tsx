@@ -49,11 +49,17 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
               <Plane className="h-5 w-5 text-primary" />
             </div>
           )}
-          <div>
+           <div>
             <p className="font-semibold text-foreground">{carrier.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {leg.stopCount === 0 ? 'Direct' : `${leg.stopCount} stop${leg.stopCount > 1 ? 's' : ''}`}
-            </p>
+            {leg.stopCount === 0 ? (
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 mt-1">
+                ✈ Nonstop
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 mt-1">
+                {leg.stopCount} stop{leg.stopCount > 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -129,9 +135,15 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
               )}
               <div>
                 <p className="font-semibold text-foreground">{flight.legs[1].carriers.marketing[0].name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {flight.legs[1].stopCount === 0 ? 'Direct' : `${flight.legs[1].stopCount} stop${flight.legs[1].stopCount > 1 ? 's' : ''}`}
-                </p>
+                {flight.legs[1].stopCount === 0 ? (
+                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 mt-1">
+                    ✈ Nonstop
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 mt-1">
+                    {flight.legs[1].stopCount} stop{flight.legs[1].stopCount > 1 ? 's' : ''}
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex-1">
