@@ -9,9 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Plane, Plus, Pencil, Trash2, LogOut, Tag } from 'lucide-react';
+import { Plane, Plus, Pencil, Trash2, LogOut, Tag, Users } from 'lucide-react';
 import { AirportAutocomplete } from '@/components/AirportAutocomplete';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 
 type DealForm = {
   title: string;
@@ -41,6 +43,20 @@ const Admin = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLeads = async () => {
+      const { data } = await supabase
+        .from('booking_leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setLeads(data || []);
+      setLeadsLoading(false);
+    };
+    if (user && isAdmin) fetchLeads();
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/admin/login');
@@ -134,97 +150,144 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-5xl">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Tag className="h-6 w-6 text-primary" /> Manage Deals
-          </h1>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="sky" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> New Deal</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingId ? 'Edit Deal' : 'Create Deal'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required maxLength={100} /></div>
-                <div><Label>Description</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} maxLength={500} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Airline Name</Label><Input value={form.airline_name} onChange={e => setForm({ ...form, airline_name: e.target.value })} placeholder="e.g. British Airways" maxLength={100} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>From Airport</Label><AirportAutocomplete value={form.origin_airport} onChange={(val) => setForm({ ...form, origin_airport: val })} placeholder="Search airport..." iataOnly /></div>
-                  <div><Label>To Airport</Label><AirportAutocomplete value={form.destination_airport} onChange={(val) => setForm({ ...form, destination_airport: val })} placeholder="Search airport..." iataOnly /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Valid From *</Label><Input type="date" value={form.valid_from} onChange={e => setForm({ ...form, valid_from: e.target.value })} required /></div>
-                  <div><Label>Valid Until *</Label><Input type="date" value={form.valid_until} onChange={e => setForm({ ...form, valid_until: e.target.value })} required /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Discount Type *</Label>
-                    <Select value={form.discount_type} onValueChange={v => setForm({ ...form, discount_type: v as 'fixed' | 'percentage' })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">Fixed Amount (£)</SelectItem>
-                        <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>Discount Value *</Label><Input type="number" min="0.01" step="0.01" value={form.discount_value} onChange={e => setForm({ ...form, discount_value: e.target.value })} required placeholder={form.discount_type === 'fixed' ? '50' : '15'} /></div>
-                </div>
-                <div>
-                  <Label>Special Price (£) — overrides discount if set</Label>
-                  <Input type="number" min="0" step="0.01" value={form.special_price} onChange={e => setForm({ ...form, special_price: e.target.value })} placeholder="Leave empty to use discount" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} />
-                  <Label>Active</Label>
-                </div>
-                <Button type="submit" disabled={submitting} variant="sky" className="w-full">
-                  {submitting ? 'Saving...' : editingId ? 'Update Deal' : 'Create Deal'}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Tabs defaultValue="deals">
+          <TabsList className="mb-6">
+            <TabsTrigger value="deals" className="gap-2"><Tag className="h-4 w-4" /> Deals</TabsTrigger>
+            <TabsTrigger value="leads" className="gap-2"><Users className="h-4 w-4" /> Booking Leads</TabsTrigger>
+          </TabsList>
 
-        {dealsLoading ? (
-          <p className="text-muted-foreground text-center py-16">Loading deals...</p>
-        ) : deals.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
-            <Tag className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-foreground mb-2">No deals yet</h3>
-            <p className="text-muted-foreground">Create your first deal to get started</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {deals.map(deal => (
-              <div key={deal.id} className="bg-card rounded-xl p-6 border border-border/50 card-shadow flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-foreground truncate">{deal.title}</h3>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${deal.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-muted text-muted-foreground'}`}>
-                      {deal.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {deal.airline_name && `${deal.airline_name} · `}
-                    {deal.origin_airport && deal.destination_airport ? `${deal.origin_airport} → ${deal.destination_airport} · ` : ''}
-                    {deal.special_price != null ? `Special: £${deal.special_price}` : deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
-                    {` · ${deal.valid_from} to ${deal.valid_until}`}
-                  </p>
-                  {deal.description && <p className="text-sm text-muted-foreground mt-1">{deal.description}</p>}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch checked={deal.is_active} onCheckedChange={() => handleToggle(deal)} />
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(deal)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(deal.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                </div>
+          <TabsContent value="deals">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Tag className="h-6 w-6 text-primary" /> Manage Deals
+              </h1>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="sky" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> New Deal</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{editingId ? 'Edit Deal' : 'Create Deal'}</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required maxLength={100} /></div>
+                    <div><Label>Description</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} maxLength={500} /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><Label>Airline Name</Label><Input value={form.airline_name} onChange={e => setForm({ ...form, airline_name: e.target.value })} placeholder="e.g. British Airways" maxLength={100} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><Label>From Airport</Label><AirportAutocomplete value={form.origin_airport} onChange={(val) => setForm({ ...form, origin_airport: val })} placeholder="Search airport..." iataOnly /></div>
+                      <div><Label>To Airport</Label><AirportAutocomplete value={form.destination_airport} onChange={(val) => setForm({ ...form, destination_airport: val })} placeholder="Search airport..." iataOnly /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><Label>Valid From *</Label><Input type="date" value={form.valid_from} onChange={e => setForm({ ...form, valid_from: e.target.value })} required /></div>
+                      <div><Label>Valid Until *</Label><Input type="date" value={form.valid_until} onChange={e => setForm({ ...form, valid_until: e.target.value })} required /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Discount Type *</Label>
+                        <Select value={form.discount_type} onValueChange={v => setForm({ ...form, discount_type: v as 'fixed' | 'percentage' })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fixed">Fixed Amount (£)</SelectItem>
+                            <SelectItem value="percentage">Percentage (%)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div><Label>Discount Value *</Label><Input type="number" min="0.01" step="0.01" value={form.discount_value} onChange={e => setForm({ ...form, discount_value: e.target.value })} required placeholder={form.discount_type === 'fixed' ? '50' : '15'} /></div>
+                    </div>
+                    <div>
+                      <Label>Special Price (£) — overrides discount if set</Label>
+                      <Input type="number" min="0" step="0.01" value={form.special_price} onChange={e => setForm({ ...form, special_price: e.target.value })} placeholder="Leave empty to use discount" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} />
+                      <Label>Active</Label>
+                    </div>
+                    <Button type="submit" disabled={submitting} variant="sky" className="w-full">
+                      {submitting ? 'Saving...' : editingId ? 'Update Deal' : 'Create Deal'}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {dealsLoading ? (
+              <p className="text-muted-foreground text-center py-16">Loading deals...</p>
+            ) : deals.length === 0 ? (
+              <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
+                <Tag className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">No deals yet</h3>
+                <p className="text-muted-foreground">Create your first deal to get started</p>
               </div>
-            ))}
-          </div>
-        )}
+            ) : (
+              <div className="space-y-4">
+                {deals.map(deal => (
+                  <div key={deal.id} className="bg-card rounded-xl p-6 border border-border/50 card-shadow flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground truncate">{deal.title}</h3>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${deal.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-muted text-muted-foreground'}`}>
+                          {deal.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {deal.airline_name && `${deal.airline_name} · `}
+                        {deal.origin_airport && deal.destination_airport ? `${deal.origin_airport} → ${deal.destination_airport} · ` : ''}
+                        {deal.special_price != null ? `Special: £${deal.special_price}` : deal.discount_type === 'fixed' ? `£${deal.discount_value} off` : `${deal.discount_value}% off`}
+                        {` · ${deal.valid_from} to ${deal.valid_until}`}
+                      </p>
+                      {deal.description && <p className="text-sm text-muted-foreground mt-1">{deal.description}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Switch checked={deal.is_active} onCheckedChange={() => handleToggle(deal)} />
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(deal)}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(deal.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="leads">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-2 mb-6">
+              <Users className="h-6 w-6 text-primary" /> Booking Leads
+            </h2>
+            {leadsLoading ? (
+              <p className="text-muted-foreground text-center py-16">Loading leads...</p>
+            ) : leads.length === 0 ? (
+              <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
+                <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">No leads yet</h3>
+                <p className="text-muted-foreground">Leads will appear here when customers request callbacks.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {leads.map((lead: any) => {
+                  const fd = lead.flight_details || {};
+                  return (
+                    <div key={lead.id} className="bg-card rounded-xl p-6 border border-border/50 card-shadow">
+                      <div className="flex flex-col md:flex-row md:items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground">{lead.full_name}</h3>
+                          <p className="text-sm text-muted-foreground">{lead.email} · {lead.phone}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {fd.airline && `${fd.airline} · `}{fd.origin} → {fd.destination} · {fd.price}
+                            {fd.deal && ` · Deal: ${fd.deal}`}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground shrink-0">
+                          {new Date(lead.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

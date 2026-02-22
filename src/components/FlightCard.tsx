@@ -1,9 +1,11 @@
-import { Clock, Plane, ArrowRight, Tag } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, Plane, ArrowRight, Tag, Phone } from 'lucide-react';
 import { FlightResult } from '@/types/flight';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FlightWithDeal } from '@/lib/applyDeals';
 import { LayoverMap } from '@/components/LayoverMap';
+import { BookingDialog } from '@/components/BookingDialog';
 
 interface FlightCardProps {
   flight: FlightWithDeal;
@@ -26,6 +28,7 @@ const formatTime = (dateString: string): string => {
 };
 
 export const FlightCard = ({ flight }: FlightCardProps) => {
+  const [bookingOpen, setBookingOpen] = useState(false);
   const leg = flight.legs[0];
   const carrier = leg.carriers.marketing[0];
   const deal = flight.deal;
@@ -124,7 +127,9 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
           {flight.tags && flight.tags.includes('fastest') && (
             <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">Fastest</Badge>
           )}
-          <Button variant="sky" className="w-full group-hover:scale-105 transition-transform">Select</Button>
+          <Button variant="sky" className="w-full group-hover:scale-105 transition-transform gap-2" onClick={() => setBookingOpen(true)}>
+            <Phone className="h-4 w-4" /> Call to Book
+          </Button>
         </div>
       </div>
 
@@ -197,6 +202,7 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
           </div>
         </>
       )}
+      <BookingDialog flight={flight} open={bookingOpen} onOpenChange={setBookingOpen} />
     </div>
   );
 };

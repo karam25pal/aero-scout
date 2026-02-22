@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      booking_leads: {
+        Row: {
+          created_at: string
+          email: string
+          flight_details: Json
+          full_name: string
+          id: string
+          phone: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          flight_details: Json
+          full_name: string
+          id?: string
+          phone: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          flight_details?: Json
+          full_name?: string
+          id?: string
+          phone?: string
+        }
+        Relationships: []
+      }
       deals: {
         Row: {
           airline_name: string | null
