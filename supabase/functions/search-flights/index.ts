@@ -3,116 +3,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const API_HOST = 'google-flights2.p.rapidapi.com';
+const HASDATA_BASE = 'https://api.hasdata.com/scrape/google/flights';
 
 const CABIN_CLASS_MAP: Record<string, string> = {
-  economy: 'ECONOMY',
-  premium_economy: 'PREMIUM_ECONOMY',
-  business: 'BUSINESS',
-  first: 'FIRST',
+  economy: 'Economy',
+  premium_economy: 'Premium Economy',
+  business: 'Business',
+  first: 'First',
 };
-
-function transformFlight(flight: any, index: number, originCode: string, destCode: string): any {
-  const price = typeof flight.price === 'number'
-    ? flight.price
-    : parseFloat(String(flight.price || '0').replace(/[^0-9.]/g, ''));
-  if (!price || price <= 0) return null;
-
-  const depTime = flight.departure_time || '';
-  const arrTime = flight.arrival_time || '';
-  const durationMin = flight.duration?.raw || 0;
-  const stops = typeof flight.stops === 'number' ? flight.stops : 0;
-  const airlineLogo = flight.airline_logo || '';
-
-  // Build legs from the `flights` array (each segment of the journey)
-  const legs: any[] = [];
-  const segments = flight.flights;
-  if (Array.isArray(segments) && segments.length > 0) {
-    // Collect unique airlines across all segments
-    const airlines = segments.map((s: any) => ({
-      name: s.airline || 'Unknown',
-      logoUrl: s.airline_logo || airlineLogo,
-    }));
-    // Dedupe airlines by name
-    const uniqueAirlines: any[] = [];
-    const seen = new Set<string>();
-    for (const a of airlines) {
-      if (!seen.has(a.name)) { seen.add(a.name); uniqueAirlines.push(a); }
-    }
-
-    const firstSeg = segments[0];
-    const lastSeg = segments[segments.length - 1];
-
-    // Build segments and layovers
-    const segmentDetails = segments.map((s: any) => ({
-      airportCode: s.departure_airport?.airport_code || '',
-      airportName: s.departure_airport?.airport_name || '',
-      departure: s.departure_time || '',
-      arrival: s.arrival_time || '',
-      durationMinutes: s.duration?.raw || 0,
-      airline: s.airline || 'Unknown',
-      airlineLogo: s.airline_logo || '',
-    }));
-
-    const layoverList: any[] = [];
-    for (let i = 0; i < segments.length - 1; i++) {
-      const arrTime2 = segments[i].arrival_time || '';
-      const depTime2 = segments[i + 1].departure_time || '';
-      const layoverAirport = segments[i].arrival_airport;
-      let layoverMin = 0;
-      if (arrTime2 && depTime2) {
-        const a = new Date(arrTime2).getTime();
-        const d = new Date(depTime2).getTime();
-        if (!isNaN(a) && !isNaN(d)) layoverMin = Math.round((d - a) / 60000);
-      }
-      layoverList.push({
-        airportCode: layoverAirport?.airport_code || '',
-        airportName: layoverAirport?.airport_name || '',
-        durationMinutes: layoverMin,
-      });
-    }
-
-    legs.push({
-      origin: {
-        name: firstSeg.departure_airport?.airport_name || originCode,
-        displayCode: firstSeg.departure_airport?.airport_code || originCode,
-        city: firstSeg.departure_airport?.airport_name || originCode,
-      },
-      destination: {
-        name: lastSeg.arrival_airport?.airport_name || destCode,
-        displayCode: lastSeg.arrival_airport?.airport_code || destCode,
-        city: lastSeg.arrival_airport?.airport_name || destCode,
-      },
-      departure: depTime,
-      arrival: arrTime,
-      durationInMinutes: durationMin,
-      carriers: { marketing: uniqueAirlines },
-      stopCount: stops,
-      segments: segmentDetails,
-      layovers: layoverList,
-    });
-  } else {
-    // Fallback
-    legs.push({
-      origin: { name: originCode, displayCode: originCode, city: originCode },
-      destination: { name: destCode, displayCode: destCode, city: destCode },
-      departure: depTime,
-      arrival: arrTime,
-      durationInMinutes: durationMin,
-      carriers: { marketing: [{ name: 'Unknown', logoUrl: airlineLogo }] },
-      stopCount: stops,
-    });
-  }
-
-  return {
-    id: `gf-${index}-${Date.now()}`,
-    price: { raw: price, formatted: `£${Math.round(price)}` },
-    legs,
-    isSelfTransfer: !!flight.self_transfer,
-    tags: [],
-    bookingToken: flight.booking_token || null,
-  };
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -132,11 +30,14 @@ Deno.serve(async (req) => {
       adults = 1,
       children = 0,
       infants = 0,
-      // Pagination
-      cursor,
-      directOnly,
+      stops,
+      tripType,
+      // Pagination via departureToken
+      departureToken,
+      bookingToken,
     } = body;
 
+    // Use IATA codes preferably
     const origin = originSkyId || originEntityId;
     const destination = destinationSkyId || destinationEntityId;
 
@@ -147,118 +48,77 @@ Deno.serve(async (req) => {
       );
     }
 
-    const rapidApiKey = Deno.env.get('RAPIDAPI_KEY');
-    if (!rapidApiKey) {
+    const apiKey = Deno.env.get('HASDATA_API_KEY');
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'RapidAPI key not configured', data: [] }),
+        JSON.stringify({ success: false, error: 'HasData API key not configured', data: [] }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    // If we have a cursor (next_token), use getNextFlights
-    if (cursor) {
-      console.log(`Loading more flights with next_token`);
-      const nextUrl = new URL(`https://${API_HOST}/api/v1/getNextFlights`);
-      nextUrl.searchParams.set('next_token', cursor);
-      nextUrl.searchParams.set('currency', 'GBP');
-      nextUrl.searchParams.set('language_code', 'en-US');
-      nextUrl.searchParams.set('country_code', 'GB');
-
-      const nextResp = await fetch(nextUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'x-rapidapi-host': API_HOST,
-          'x-rapidapi-key': rapidApiKey,
-        },
-      });
-
-      if (!nextResp.ok) {
-        const errText = await nextResp.text();
-        console.error('getNextFlights error:', nextResp.status, errText.slice(0, 500));
-        throw new Error(`API error: ${nextResp.status}`);
-      }
-
-      const nextData = await nextResp.json();
-      console.log('getNextFlights response keys:', Object.keys(nextData));
-
-      const nextFlightsRaw = extractFlightsFromResponse(nextData);
-      const nextFlights = nextFlightsRaw
-        .map((f: any, i: number) => transformFlight(f, i + 1000, origin, destination))
-        .filter((f: any) => f !== null);
-
-      const nextToken = nextData?.data?.next_token || nextData?.next_token || null;
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: nextFlights,
-          meta: {
-            totalCount: nextFlights.length,
-            hasNextPage: !!nextToken,
-            next: nextToken ? { cursor: nextToken } : null,
-          },
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    // Build URL
+    const url = new URL(HASDATA_BASE);
+    url.searchParams.set('departureId', origin);
+    url.searchParams.set('arrivalId', destination);
+    url.searchParams.set('outboundDate', date);
+    
+    // Trip type
+    const resolvedType = tripType === 'one-way' ? 'oneWay' : 'roundTrip';
+    url.searchParams.set('type', resolvedType);
+    
+    if (returnDate && resolvedType === 'roundTrip') {
+      url.searchParams.set('returnDate', returnDate);
     }
 
-    // Initial search
-    console.log(`Flight search: ${origin} → ${destination} on ${date}`);
+    url.searchParams.set('travelClass', CABIN_CLASS_MAP[cabinClass] || 'Economy');
+    url.searchParams.set('currency', 'GBP');
+    url.searchParams.set('gl', 'GB');
+    url.searchParams.set('hl', 'en');
+    url.searchParams.set('adults', String(adults));
+    if (children > 0) url.searchParams.set('children', String(children));
+    if (infants > 0) url.searchParams.set('infantsOnLap', String(infants));
+    
+    // Always show hidden fares and deep search
+    url.searchParams.set('showHidden', 'true');
+    url.searchParams.set('deepSearch', 'true');
 
-    const searchUrl = new URL(`https://${API_HOST}/api/v1/searchFlights`);
-    searchUrl.searchParams.set('departure_id', origin);
-    searchUrl.searchParams.set('arrival_id', destination);
-    searchUrl.searchParams.set('outbound_date', date);
-    if (returnDate) searchUrl.searchParams.set('return_date', returnDate);
-    searchUrl.searchParams.set('adults', String(adults));
-    if (children > 0) searchUrl.searchParams.set('children', String(children));
-    if (infants > 0) searchUrl.searchParams.set('infant_on_lap', String(infants));
-    searchUrl.searchParams.set('travel_class', CABIN_CLASS_MAP[cabinClass] || 'ECONOMY');
-    searchUrl.searchParams.set('currency', 'GBP');
-    searchUrl.searchParams.set('language_code', 'en-US');
-    searchUrl.searchParams.set('country_code', 'GB');
-    searchUrl.searchParams.set('show_hidden', '1');
-    if (directOnly) searchUrl.searchParams.set('stops', '1');
+    // Stops filter
+    if (stops !== undefined && stops !== null && stops !== '') {
+      url.searchParams.set('stops', String(stops));
+    }
 
-    console.log('API URL:', searchUrl.toString());
+    // Departure token for pagination / return flights
+    if (departureToken) {
+      url.searchParams.set('departureToken', departureToken);
+    }
+    if (bookingToken) {
+      url.searchParams.set('bookingToken', bookingToken);
+    }
 
-    const response = await fetch(searchUrl.toString(), {
+    console.log(`HasData flight search: ${origin} → ${destination} on ${date}`);
+    console.log('API URL:', url.toString().replace(apiKey, '***'));
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'x-rapidapi-host': API_HOST,
-        'x-rapidapi-key': rapidApiKey,
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
       },
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('searchFlights error:', response.status, errText.slice(0, 500));
+      console.error('HasData API error:', response.status, errText.slice(0, 500));
       throw new Error(`API error: ${response.status}`);
     }
 
     const apiData = await response.json();
-    console.log('API response status:', apiData.status, 'message:', apiData.message);
-    console.log('API response data keys:', apiData.data ? Object.keys(apiData.data) : 'no data');
+    console.log('HasData response keys:', Object.keys(apiData));
 
-    // Log full response structure for debugging
-    if (apiData.data?.itineraries) {
-      const itin = apiData.data.itineraries;
-      if (itin.topFlights) console.log('topFlights count:', itin.topFlights.length);
-      if (itin.otherFlights) console.log('otherFlights count:', itin.otherFlights.length);
-      if (Array.isArray(itin)) console.log('itineraries array count:', itin.length);
-    }
-
-    const rawFlights = extractFlightsFromResponse(apiData);
-    console.log(`Extracted ${rawFlights.length} raw flights`);
-
-    const flights = rawFlights
-      .map((f: any, i: number) => transformFlight(f, i, origin, destination))
-      .filter((f: any) => f !== null);
-
+    // Transform HasData response to our internal format
+    const flights = transformHasDataResponse(apiData, origin, destination);
     flights.sort((a: any, b: any) => a.price.raw - b.price.raw);
     console.log(`Returning ${flights.length} flights`);
-
-    const nextToken = apiData.data?.next_token || null;
 
     return new Response(
       JSON.stringify({
@@ -266,8 +126,8 @@ Deno.serve(async (req) => {
         data: flights,
         meta: {
           totalCount: flights.length,
-          hasNextPage: !!nextToken,
-          next: nextToken ? { cursor: nextToken } : null,
+          hasNextPage: false,
+          next: null,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -282,36 +142,168 @@ Deno.serve(async (req) => {
   }
 });
 
-function extractFlightsFromResponse(apiData: any): any[] {
-  const flights: any[] = [];
+function transformHasDataResponse(apiData: any, originCode: string, destCode: string): any[] {
+  const results: any[] = [];
 
-  if (!apiData?.data) return flights;
-  const data = apiData.data;
+  // HasData returns data in various structures - handle them all
+  // Common: { bestFlights: [...], otherFlights: [...] }
+  // Or nested under data
+  const data = apiData?.data || apiData;
+  
+  const allFlightGroups: any[] = [];
+  
+  if (Array.isArray(data?.bestFlights)) allFlightGroups.push(...data.bestFlights);
+  if (Array.isArray(data?.otherFlights)) allFlightGroups.push(...data.otherFlights);
+  if (Array.isArray(data?.best_flights)) allFlightGroups.push(...data.best_flights);
+  if (Array.isArray(data?.other_flights)) allFlightGroups.push(...data.other_flights);
+  
+  // If top-level arrays
+  if (Array.isArray(apiData?.bestFlights)) allFlightGroups.push(...apiData.bestFlights);
+  if (Array.isArray(apiData?.otherFlights)) allFlightGroups.push(...apiData.otherFlights);
+  if (Array.isArray(apiData?.best_flights)) allFlightGroups.push(...apiData.best_flights);
+  if (Array.isArray(apiData?.other_flights)) allFlightGroups.push(...apiData.other_flights);
 
-  // Handle itineraries object with topFlights / otherFlights arrays
-  if (data.itineraries) {
-    const itin = data.itineraries;
-    if (Array.isArray(itin.topFlights)) {
-      flights.push(...itin.topFlights);
-    }
-    if (Array.isArray(itin.otherFlights)) {
-      flights.push(...itin.otherFlights);
-    }
-    // If itineraries is itself an array
-    if (Array.isArray(itin)) {
-      flights.push(...itin);
-    }
+  // Some APIs return flights directly as array
+  if (Array.isArray(data)) allFlightGroups.push(...data);
+
+  console.log(`Found ${allFlightGroups.length} flight groups to process`);
+
+  for (let i = 0; i < allFlightGroups.length; i++) {
+    const flight = allFlightGroups[i];
+    const transformed = transformSingleFlight(flight, i, originCode, destCode);
+    if (transformed) results.push(transformed);
   }
 
-  // If data is directly an array of flights
-  if (Array.isArray(data)) {
-    flights.push(...data);
+  return results;
+}
+
+function transformSingleFlight(flight: any, index: number, originCode: string, destCode: string): any | null {
+  // Extract price - HasData Google Flights format
+  let price = 0;
+  if (typeof flight.price === 'number') {
+    price = flight.price;
+  } else if (typeof flight.price === 'string') {
+    price = parseFloat(flight.price.replace(/[^0-9.]/g, ''));
+  } else if (flight.price?.raw) {
+    price = flight.price.raw;
+  }
+  if (!price || price <= 0) return null;
+
+  // Build legs from flights array (Google Flights structure)
+  const legs: any[] = [];
+  const segments = flight.flights || flight.legs || [];
+  
+  if (Array.isArray(segments) && segments.length > 0) {
+    // Collect airlines
+    const airlines = segments.map((s: any) => ({
+      name: s.airline || s.carrier || 'Unknown',
+      logoUrl: s.airline_logo || s.airlineLogo || '',
+    }));
+    const uniqueAirlines: any[] = [];
+    const seen = new Set<string>();
+    for (const a of airlines) {
+      if (!seen.has(a.name)) { seen.add(a.name); uniqueAirlines.push(a); }
+    }
+
+    const firstSeg = segments[0];
+    const lastSeg = segments[segments.length - 1];
+
+    // Departure/arrival info
+    const depAirport = firstSeg.departure_airport || firstSeg.departureAirport || {};
+    const arrAirport = lastSeg.arrival_airport || lastSeg.arrivalAirport || {};
+
+    // Build segment details
+    const segmentDetails = segments.map((s: any) => {
+      const depAp = s.departure_airport || s.departureAirport || {};
+      const arrAp = s.arrival_airport || s.arrivalAirport || {};
+      return {
+        airportCode: depAp.id || depAp.airport_code || depAp.code || '',
+        airportName: depAp.name || depAp.airport_name || '',
+        departure: depAp.time || s.departure_time || s.departureTime || '',
+        arrival: arrAp.time || s.arrival_time || s.arrivalTime || '',
+        durationMinutes: s.duration || s.duration_minutes || 0,
+        airline: s.airline || s.carrier || 'Unknown',
+        airlineLogo: s.airline_logo || s.airlineLogo || '',
+      };
+    });
+
+    // Build layovers
+    const layoverList: any[] = [];
+    if (Array.isArray(flight.layovers)) {
+      for (const lo of flight.layovers) {
+        layoverList.push({
+          airportCode: lo.id || lo.airport_code || lo.code || '',
+          airportName: lo.name || lo.airport_name || '',
+          durationMinutes: lo.duration || lo.duration_minutes || 0,
+        });
+      }
+    } else {
+      // Calculate from segments
+      for (let j = 0; j < segments.length - 1; j++) {
+        const arrAp2 = segments[j].arrival_airport || segments[j].arrivalAirport || {};
+        const arrTime = arrAp2.time || segments[j].arrival_time || '';
+        const depAp2 = segments[j + 1].departure_airport || segments[j + 1].departureAirport || {};
+        const depTime = depAp2.time || segments[j + 1].departure_time || '';
+        let layoverMin = 0;
+        if (arrTime && depTime) {
+          const a = new Date(arrTime).getTime();
+          const d = new Date(depTime).getTime();
+          if (!isNaN(a) && !isNaN(d)) layoverMin = Math.round((d - a) / 60000);
+        }
+        layoverList.push({
+          airportCode: arrAp2.id || arrAp2.airport_code || arrAp2.code || '',
+          airportName: arrAp2.name || arrAp2.airport_name || '',
+          durationMinutes: layoverMin,
+        });
+      }
+    }
+
+    const totalDuration = flight.total_duration || flight.totalDuration || flight.duration?.raw || 
+      segments.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+    const stopCount = typeof flight.stops === 'number' ? flight.stops : 
+      (layoverList.length > 0 ? layoverList.length : Math.max(0, segments.length - 1));
+
+    const depTime = depAirport.time || firstSeg.departure_time || '';
+    const arrTime = arrAirport.time || lastSeg.arrival_time || '';
+
+    legs.push({
+      origin: {
+        name: depAirport.name || depAirport.airport_name || originCode,
+        displayCode: depAirport.id || depAirport.airport_code || depAirport.code || originCode,
+        city: depAirport.name || originCode,
+      },
+      destination: {
+        name: arrAirport.name || arrAirport.airport_name || destCode,
+        displayCode: arrAirport.id || arrAirport.airport_code || arrAirport.code || destCode,
+        city: arrAirport.name || destCode,
+      },
+      departure: depTime,
+      arrival: arrTime,
+      durationInMinutes: totalDuration,
+      carriers: { marketing: uniqueAirlines },
+      stopCount,
+      segments: segmentDetails,
+      layovers: layoverList,
+    });
+  } else {
+    // Fallback for flat structure
+    legs.push({
+      origin: { name: originCode, displayCode: originCode, city: originCode },
+      destination: { name: destCode, displayCode: destCode, city: destCode },
+      departure: flight.departure_time || '',
+      arrival: flight.arrival_time || '',
+      durationInMinutes: flight.duration?.raw || flight.total_duration || 0,
+      carriers: { marketing: [{ name: flight.airline || 'Unknown', logoUrl: flight.airline_logo || '' }] },
+      stopCount: flight.stops || 0,
+    });
   }
 
-  // If data.flights exists
-  if (Array.isArray(data.flights)) {
-    flights.push(...data.flights);
-  }
-
-  return flights;
+  return {
+    id: `hd-${index}-${Date.now()}`,
+    price: { raw: price, formatted: `£${Math.round(price)}` },
+    legs,
+    isSelfTransfer: false,
+    tags: flight.type === 'Best' ? ['best'] : [],
+    bookingToken: flight.booking_token || flight.departureToken || flight.departure_token || null,
+  };
 }

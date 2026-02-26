@@ -70,5 +70,6 @@ export interface SearchParams {
   adults: number;
   children: number;
   infants: number;
-  directOnly?: boolean;
+  stops?: string;
+  tripType?: 'one-way' | 'round-trip';
 }

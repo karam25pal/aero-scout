@@ -29,6 +29,7 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
+  const [stops, setStops] = useState<string>('');
   
   const [showOriginDropdown, setShowOriginDropdown] = useState(false);
   const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
@@ -110,17 +111,18 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
     if (!selectedOrigin || !selectedDestination || !departureDate) return;
 
     onSearch({
-      originSkyId: selectedOrigin.skyId,
-      destinationSkyId: selectedDestination.skyId,
-      originEntityId: selectedOrigin.entityId,
-      destinationEntityId: selectedDestination.entityId,
+      originSkyId: selectedOrigin.skyId || selectedOrigin.iata,
+      destinationSkyId: selectedDestination.skyId || selectedDestination.iata,
+      originEntityId: selectedOrigin.entityId || selectedOrigin.iata,
+      destinationEntityId: selectedDestination.entityId || selectedDestination.iata,
       date: format(departureDate, 'yyyy-MM-dd'),
       returnDate: tripType === 'round-trip' && returnDate ? format(returnDate, 'yyyy-MM-dd') : undefined,
       cabinClass,
       adults,
       children,
       infants,
-      
+      stops: stops || undefined,
+      tripType,
     });
   };
 
@@ -426,7 +428,18 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
             </SelectContent>
           </Select>
 
-          
+          <Select value={stops} onValueChange={setStops}>
+            <SelectTrigger className="w-auto border-0 bg-transparent">
+              <SelectValue placeholder="Any stops" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any stops</SelectItem>
+              <SelectItem value="0">Nonstop only</SelectItem>
+              <SelectItem value="1">1 stop or fewer</SelectItem>
+              <SelectItem value="2">2 stops or fewer</SelectItem>
+            </SelectContent>
+          </Select>
+
         </div>
       </div>
     </div>
