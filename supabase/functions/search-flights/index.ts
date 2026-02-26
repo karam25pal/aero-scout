@@ -116,7 +116,18 @@ Deno.serve(async (req) => {
     console.log('HasData response keys:', Object.keys(apiData));
 
     // Transform HasData response to our internal format
-    const flights = transformHasDataResponse(apiData, origin, destination);
+    let flights = transformHasDataResponse(apiData, origin, destination);
+
+    // Client-side stops filter (API doesn't always respect the stops param)
+    if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
+      const maxStops = parseInt(String(stops), 10);
+      if (!isNaN(maxStops)) {
+        flights = flights.filter((f: any) =>
+          f.legs.every((leg: any) => (leg.stopCount || 0) <= maxStops)
+        );
+      }
+    }
+
     flights.sort((a: any, b: any) => a.price.raw - b.price.raw);
     console.log(`Returning ${flights.length} flights`);
 
