@@ -12,6 +12,12 @@ const CABIN_CLASS_MAP: Record<string, string> = {
   first: 'first',
 };
 
+const STOPS_MAP: Record<string, string> = {
+  '0': 'nonStop',
+  '1': 'oneStopOrFewer',
+  '2': 'twoStopsOrFewer',
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -82,9 +88,10 @@ Deno.serve(async (req) => {
     url.searchParams.set('showHidden', 'true');
     url.searchParams.set('deepSearch', 'true');
 
-    // Stops filter
-    if (stops !== undefined && stops !== null && stops !== '') {
-      url.searchParams.set('stops', String(stops));
+    // Stops filter - map numeric values to HasData API string values
+    if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
+      const mappedStops = STOPS_MAP[String(stops)] || String(stops);
+      url.searchParams.set('stops', mappedStops);
     }
 
     // Departure token for pagination / return flights
