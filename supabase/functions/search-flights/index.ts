@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     url.searchParams.set('travelClass', CABIN_CLASS_MAP[cabinClass] || 'Economy');
     url.searchParams.set('currency', 'GBP');
-    url.searchParams.set('gl', 'GB');
+    url.searchParams.set('gl', 'gb');
     url.searchParams.set('hl', 'en');
     url.searchParams.set('adults', String(adults));
     if (children > 0) url.searchParams.set('children', String(children));
