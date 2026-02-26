@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Plane, ArrowRight, Tag, Phone } from 'lucide-react';
+import { Clock, Plane, ArrowRight, Tag, Luggage, Wifi, ChevronDown, ChevronUp } from 'lucide-react';
 import { FlightResult } from '@/types/flight';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,9 +29,16 @@ const formatTime = (dateString: string): string => {
 
 export const FlightCard = ({ flight }: FlightCardProps) => {
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const leg = flight.legs[0];
   const carrier = leg.carriers.marketing[0];
   const deal = flight.deal;
+  const formatDate = (dateString: string) => {
+    if (!dateString || /^\d{1,2}:\d{2}$/.test(dateString)) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
 
   return (
     <div className={`bg-card rounded-xl p-6 card-shadow hover:card-shadow-hover transition-all duration-300 border group ${deal ? 'border-accent/40 ring-1 ring-accent/20' : 'border-border/50'}`}>
@@ -128,10 +135,43 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
             <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">Fastest</Badge>
           )}
           <Button variant="sky" className="w-full group-hover:scale-105 transition-transform gap-2" onClick={() => setBookingOpen(true)}>
-            <Phone className="h-4 w-4" /> Call to Book
+            Book Now
+          </Button>
+          <Button variant="ghost" size="sm" className="w-full text-xs gap-1 text-muted-foreground" onClick={() => setShowDetails(!showDetails)}>
+            {showDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {showDetails ? 'Less details' : 'More details'}
           </Button>
         </div>
       </div>
+
+      {/* Expandable Details */}
+      {showDetails && (
+        <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-muted-foreground text-xs mb-1">Date</p>
+            <p className="font-medium text-foreground">{formatDate(leg.departure) || '—'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs mb-1">Duration</p>
+            <p className="font-medium text-foreground">{formatDuration(leg.durationInMinutes)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs mb-1">Airports</p>
+            <p className="font-medium text-foreground">{leg.origin.name} → {leg.destination.name}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs mb-1">Carrier</p>
+            <p className="font-medium text-foreground">{carrier.name}</p>
+          </div>
+          {flight.isSelfTransfer && (
+            <div className="col-span-2 md:col-span-4">
+              <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                ⚠ Self-transfer — you may need to collect and re-check bags
+              </Badge>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Return Leg */}
       {flight.legs.length > 1 && (
