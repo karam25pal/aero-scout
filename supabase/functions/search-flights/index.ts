@@ -6,10 +6,10 @@ const corsHeaders = {
 const HASDATA_BASE = 'https://api.hasdata.com/scrape/google/flights';
 
 const CABIN_CLASS_MAP: Record<string, string> = {
-  economy: 'Economy',
-  premium_economy: 'Premium Economy',
-  business: 'Business',
-  first: 'First',
+  economy: 'economy',
+  premium_economy: 'premiumEconomy',
+  business: 'business',
+  first: 'first',
 };
 
 Deno.serve(async (req) => {
