@@ -75,6 +75,21 @@ export const BookingDialog = ({ flight, open, onOpenChange }: BookingDialogProps
       });
 
       if (error) throw error;
+
+      // Send email notification via Resend
+      try {
+        await supabase.functions.invoke('send-booking-email', {
+          body: {
+            fullName: form.fullName.trim(),
+            email: form.email.trim(),
+            phone: form.phone.trim(),
+            flightDetails,
+          },
+        });
+      } catch (emailErr) {
+        console.warn('Email notification failed (non-blocking):', emailErr);
+      }
+
       setStep('confirmation');
     } catch (err) {
       console.error('Booking error:', err);
