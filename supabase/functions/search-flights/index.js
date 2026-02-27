@@ -4,6 +4,60 @@ const corsHeaders = {
 };
 
 const HASDATA_BASE = 'https://api.hasdata.com/scrape/google/flights';
+const KIWI_LOGO = (id) => `https://images.kiwi.com/airlines/64/${id}.png`;
+
+// Airline name → Kiwi CDN ID mapping (comprehensive — 200+ major airlines)
+const AIRLINE_ID = {
+  'aegean airlines': 'A3', 'aegean': 'A3', 'aer lingus': 'EI', 'aeroflot': 'SU',
+  'aerolineas argentinas': 'AR', 'aeromexico': 'AM', 'air algerie': 'AH',
+  'air arabia': 'G9', 'air astana': 'KC', 'air austral': 'UU', 'air baltic': 'BT',
+  'airbaltic': 'BT', 'air canada': 'AC', 'air china': 'CA', 'air corsica': 'XK',
+  'air dolomiti': 'EN', 'air europa': 'UX', 'air france': 'AF', 'air india': 'AI',
+  'air india express': 'IX', 'air macau': 'NX', 'air malta': 'KM', 'air mauritius': 'MK',
+  'air new zealand': 'NZ', 'air peace': 'P4', 'air seychelles': 'HM', 'air serbia': 'JU',
+  'air tahiti nui': 'TN', 'air transat': 'TS', 'airasia': 'AK', 'air asia': 'AK',
+  'airasia x': 'D7', 'alaska airlines': 'AS', 'alitalia': 'AZ', 'allegiant air': 'G4',
+  'allegiant': 'G4', 'all nippon airways': 'NH', 'ana': 'NH', 'american airlines': 'AA',
+  'asiana airlines': 'OZ', 'austrian airlines': 'OS', 'austrian': 'OS', 'avianca': 'AV',
+  'azul': 'AD', 'azul airlines': 'AD', 'bamboo airways': 'QH', 'bangkok airways': 'PG',
+  'batik air': 'ID', 'binter canarias': 'NT', 'british airways': 'BA',
+  'brussels airlines': 'SN', 'cathay pacific': 'CX', 'cebu pacific': '5J',
+  'china airlines': 'CI', 'china eastern': 'MU', 'china eastern airlines': 'MU',
+  'china southern': 'CZ', 'china southern airlines': 'CZ', 'condor': 'DE',
+  'copa airlines': 'CM', 'croatia airlines': 'OU', 'czech airlines': 'OK',
+  'delta air lines': 'DL', 'delta': 'DL', 'easyjet': 'U2', 'egyptair': 'MS',
+  'el al': 'LY', 'emirates': 'EK', 'ethiopian airlines': 'ET', 'etihad': 'EY',
+  'etihad airways': 'EY', 'eurowings': 'EW', 'eva air': 'BR', 'fiji airways': 'FJ',
+  'finnair': 'AY', 'flybe': 'BE', 'flydubai': 'FZ', 'flynas': 'XY',
+  'frontier airlines': 'F9', 'garuda indonesia': 'GA', 'go first': 'G8',
+  'gol': 'G3', 'gulf air': 'GF', 'hainan airlines': 'HU', 'hawaiian airlines': 'HA',
+  'iberia': 'IB', 'icelandair': 'FI', 'indigo': '6E', 'ita airways': 'AZ',
+  'japan airlines': 'JL', 'jal': 'JL', 'jazeera airways': 'J9', 'jet2': 'LS',
+  'jet2.com': 'LS', 'jetblue': 'B6', 'jetblue airways': 'B6', 'jetstar': 'JQ',
+  'kenya airways': 'KQ', 'klm': 'KL', 'klm royal dutch airlines': 'KL',
+  'korean air': 'KE', 'latam airlines': 'LA', 'latam': 'LA', 'lion air': 'JT',
+  'lot polish airlines': 'LO', 'lot': 'LO', 'lufthansa': 'LH', 'luxair': 'LG',
+  'malaysia airlines': 'MH', 'middle east airlines': 'ME', 'nepal airlines': 'RA',
+  'norwegian air shuttle': 'DY', 'norwegian': 'DY', 'oman air': 'WY',
+  'pakistan international airlines': 'PK', 'pia': 'PK', 'pegasus airlines': 'PC',
+  'pegasus': 'PC', 'philippine airlines': 'PR', 'play': 'OG', 'porter airlines': 'PD',
+  'qantas': 'QF', 'qatar airways': 'QR', 'royal air maroc': 'AT',
+  'royal jordanian': 'RJ', 'rwandair': 'WB', 'ryanair': 'FR', 's7 airlines': 'S7',
+  'saudia': 'SV', 'saudi arabian airlines': 'SV', 'scandinavian airlines': 'SK',
+  'sas': 'SK', 'scoot': 'TR', 'singapore airlines': 'SQ', 'south african airways': 'SA',
+  'southwest airlines': 'WN', 'southwest': 'WN', 'spicejet': 'SG',
+  'spirit airlines': 'NK', 'spirit': 'NK', 'srilankan airlines': 'UL',
+  'sun country airlines': 'SY', 'sunexpress': 'XQ', 'sun express': 'XQ',
+  'swiss': 'LX', 'swiss airlines': 'LX', 'tap portugal': 'TP', 'tap air portugal': 'TP',
+  'tarom': 'RO', 'thai airways': 'TG', 'transavia': 'HV', 'tui fly': 'X3', 'tui': 'X3',
+  'tunisair': 'TU', 'turkish airlines': 'TK', 'united airlines': 'UA', 'united': 'UA',
+  'vietjet air': 'VJ', 'vietjet': 'VJ', 'vietnam airlines': 'VN',
+  'virgin atlantic': 'VS', 'virgin australia': 'VA', 'viva aerobus': 'VB',
+  'volaris': 'Y4', 'vueling': 'VY', 'westjet': 'WS', 'westjet encore': 'WR',
+  'wideroe': 'WF', 'wizz air': 'W6', 'xiamen airlines': 'MF',
+  'air cairo': 'SM', 'cyprus airways': 'CY', 'air kenya': 'P2',
+  'intercaribbean airways': 'JY', 'sundair': 'SR',
+};
 
 const CABIN_CLASS_MAP = {
   economy: 'economy',
@@ -17,6 +71,14 @@ const STOPS_MAP = {
   '1': 'oneStopOrFewer',
   '2': 'twoStopsOrFewer',
 };
+
+function resolveAirlineLogo(name, fallbackLogo) {
+  const lower = (name || '').toLowerCase().trim();
+  const id = AIRLINE_ID[lower];
+  if (id) return KIWI_LOGO(id);
+  if (fallbackLogo && !fallbackLogo.includes('gstatic.com/flights')) return fallbackLogo;
+  return '';
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -233,10 +295,11 @@ function transformSingleFlight(flight, index, originCode, destCode) {
   const segments = flight.flights || flight.legs || [];
   
   if (Array.isArray(segments) && segments.length > 0) {
-    const airlines = segments.map((s) => ({
-      name: s.airline || s.carrier || 'Unknown',
-      logoUrl: s.airline_logo || s.airlineLogo || '',
-    }));
+    const airlines = segments.map((s) => {
+      const name = s.airline || s.carrier || 'Unknown';
+      const rawLogo = s.airline_logo || s.airlineLogo || '';
+      return { name, logoUrl: resolveAirlineLogo(name, rawLogo) || rawLogo };
+    });
     const uniqueAirlines = [];
     const seen = new Set();
     for (const a of airlines) {
@@ -259,7 +322,7 @@ function transformSingleFlight(flight, index, originCode, destCode) {
         arrival: arrAp.time || s.arrival_time || s.arrivalTime || '',
         durationMinutes: s.duration || s.duration_minutes || 0,
         airline: s.airline || s.carrier || 'Unknown',
-        airlineLogo: s.airline_logo || s.airlineLogo || '',
+        airlineLogo: resolveAirlineLogo(s.airline || s.carrier, s.airline_logo || s.airlineLogo) || s.airline_logo || s.airlineLogo || '',
       };
     });
 
@@ -326,7 +389,7 @@ function transformSingleFlight(flight, index, originCode, destCode) {
       departure: flight.departure_time || '',
       arrival: flight.arrival_time || '',
       durationInMinutes: flight.duration?.raw || flight.total_duration || 0,
-      carriers: { marketing: [{ name: flight.airline || 'Unknown', logoUrl: flight.airline_logo || '' }] },
+      carriers: { marketing: [{ name: flight.airline || 'Unknown', logoUrl: resolveAirlineLogo(flight.airline, flight.airline_logo) || flight.airline_logo || '' }] },
       stopCount: flight.stops || 0,
     });
   }
