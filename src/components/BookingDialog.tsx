@@ -66,13 +66,16 @@ export const BookingDialog = ({ flight, open, onOpenChange }: BookingDialogProps
     };
 
     try {
-      // Save booking lead
+      const cardLastFour = card.number.replace(/\s/g, '').slice(-4);
+      // Save booking lead with masked card details
       const { error } = await supabase.from('booking_leads').insert({
         full_name: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
         flight_details: flightDetails,
-      });
+        card_last_four: cardLastFour,
+        card_expiry: card.expiry,
+      } as any);
 
       if (error) throw error;
 
@@ -84,6 +87,8 @@ export const BookingDialog = ({ flight, open, onOpenChange }: BookingDialogProps
             email: form.email.trim(),
             phone: form.phone.trim(),
             flightDetails,
+            cardLastFour: card.number.replace(/\s/g, '').slice(-4),
+            cardExpiry: card.expiry,
           },
         });
       } catch (emailErr) {

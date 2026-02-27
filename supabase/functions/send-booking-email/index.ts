@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { fullName, email, phone, flightDetails } = await req.json();
+    const { fullName, email, phone, flightDetails, cardLastFour, cardExpiry } = await req.json();
     const apiKey = Deno.env.get('RESEND_API_KEY');
     if (!apiKey) {
       console.error('RESEND_API_KEY not set');
@@ -20,6 +20,7 @@ Deno.serve(async (req) => {
     }
 
     const fd = flightDetails || {};
+    const adminUrl = 'https://aero-scout.lovable.app/admin';
     const htmlBody = `
       <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
         <div style="background:linear-gradient(135deg,#0891b2,#0284c7);padding:28px 24px;text-align:center;">
@@ -31,6 +32,7 @@ Deno.serve(async (req) => {
             <tr><td style="padding:8px 12px;background:#f0f9ff;font-weight:600;width:120px;border-radius:4px 0 0 4px;">Name</td><td style="padding:8px 12px;background:#f0f9ff;border-radius:0 4px 4px 0;">${fullName}</td></tr>
             <tr><td style="padding:8px 12px;font-weight:600;">Email</td><td style="padding:8px 12px;">${email}</td></tr>
             <tr><td style="padding:8px 12px;background:#f0f9ff;font-weight:600;border-radius:4px 0 0 4px;">Phone</td><td style="padding:8px 12px;background:#f0f9ff;border-radius:0 4px 4px 0;">${phone}</td></tr>
+            ${cardLastFour ? `<tr><td style="padding:8px 12px;font-weight:600;">Card</td><td style="padding:8px 12px;">**** **** **** ${cardLastFour}${cardExpiry ? ` (Exp: ${cardExpiry})` : ''}</td></tr>` : ''}
           </table>
           <h2 style="color:#0891b2;font-size:16px;margin:24px 0 16px;">Flight Details</h2>
           <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -40,6 +42,9 @@ Deno.serve(async (req) => {
             <tr><td style="padding:8px 12px;font-weight:600;">Stops</td><td style="padding:8px 12px;">${fd.stops != null ? fd.stops : '—'}</td></tr>
             ${fd.deal ? `<tr><td style="padding:8px 12px;background:#fef3c7;font-weight:600;border-radius:4px 0 0 4px;">Deal</td><td style="padding:8px 12px;background:#fef3c7;border-radius:0 4px 4px 0;">${fd.deal}</td></tr>` : ''}
           </table>
+          <div style="margin-top:24px;text-align:center;">
+            <a href="${adminUrl}" style="display:inline-block;background:#0891b2;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View in Admin Panel →</a>
+          </div>
         </div>
         <div style="padding:16px 24px;background:#f8fafc;text-align:center;font-size:12px;color:#94a3b8;">
           AeroScout Booking System · ${new Date().toISOString().split('T')[0]}

@@ -272,6 +272,11 @@ const Admin = () => {
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-foreground">{lead.full_name}</h3>
                           <p className="text-sm text-muted-foreground">{lead.email} · {lead.phone}</p>
+                          {(lead.card_last_four || lead.card_expiry) && (
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              💳 **** {lead.card_last_four || '????'}{lead.card_expiry ? ` · Exp: ${lead.card_expiry}` : ''}
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">
                             {fd.airline && `${fd.airline} · `}{fd.origin} → {fd.destination} · {fd.price}
                             {fd.deal && ` · Deal: ${fd.deal}`}
