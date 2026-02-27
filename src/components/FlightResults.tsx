@@ -12,6 +12,7 @@ interface FlightResultsProps {
   hasNextPage?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  isMultiCity?: boolean;
 }
 
 export const FlightResults = ({
@@ -21,6 +22,7 @@ export const FlightResults = ({
   hasNextPage,
   isLoadingMore,
   onLoadMore,
+  isMultiCity,
 }: FlightResultsProps) => {
   const [airlineFilter, setAirlineFilter] = useState('');
   const [showFilter, setShowFilter] = useState(false);
@@ -208,7 +210,7 @@ export const FlightResults = ({
           </div>
           <div className="space-y-4">
             {dealFlights.map((flight) => (
-              <FlightCard key={flight.id} flight={flight} />
+              <FlightCard key={flight.id} flight={flight} isMultiCity={isMultiCity} />
             ))}
           </div>
         </div>
@@ -222,7 +224,7 @@ export const FlightResults = ({
           )}
           <div className="space-y-4">
             {regularFlights.map((flight) => (
-              <FlightCard key={flight.id} flight={flight} />
+              <FlightCard key={flight.id} flight={flight} isMultiCity={isMultiCity} />
             ))}
           </div>
         </div>

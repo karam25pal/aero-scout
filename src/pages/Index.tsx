@@ -24,6 +24,7 @@ const Index = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [lastParams, setLastParams] = useState<SearchParams | null>(null);
   const [meta, setMeta] = useState<FlightSearchMeta | null>(null);
+  const [isMultiCitySearch, setIsMultiCitySearch] = useState(false);
   const { toast } = useToast();
   const { deals } = useActiveDeals();
 
@@ -34,6 +35,7 @@ const Index = () => {
     setRawFlights([]);
     setLastParams(params);
     setMeta(null);
+    setIsMultiCitySearch(params.tripType === 'multi-city');
 
     try {
       const { data, error } = await supabase.functions.invoke('search-flights', { body: params });
@@ -124,6 +126,7 @@ const Index = () => {
             hasNextPage={meta?.hasNextPage}
             isLoadingMore={isLoadingMore}
             onLoadMore={handleLoadMore}
+            isMultiCity={isMultiCitySearch}
           />
           {!isLoading && hasSearched && flights.length === 0 && (
             <div className="w-full max-w-5xl mx-auto mt-8">

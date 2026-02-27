@@ -200,7 +200,17 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
 
   const addMultiCityRow = () => {
     if (multiCityRows.length >= 5) return;
-    setMultiCityRows(prev => [...prev, { originQuery: '', destinationQuery: '', selectedOrigin: null, selectedDestination: null, date: undefined }]);
+    setMultiCityRows(prev => {
+      const lastRow = prev[prev.length - 1];
+      const newRow: MultiCityRow = {
+        originQuery: lastRow?.selectedDestination ? `${lastRow.selectedDestination.city} (${lastRow.selectedDestination.iata})` : '',
+        destinationQuery: '',
+        selectedOrigin: lastRow?.selectedDestination || null,
+        selectedDestination: null,
+        date: undefined,
+      };
+      return [...prev, newRow];
+    });
   };
 
   const removeMultiCityRow = (index: number) => {
