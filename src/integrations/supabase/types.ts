@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       booking_leads: {
         Row: {
+          card_expiry: string | null
+          card_last_four: string | null
           created_at: string
           email: string
           flight_details: Json
@@ -24,6 +26,8 @@ export type Database = {
           phone: string
         }
         Insert: {
+          card_expiry?: string | null
+          card_last_four?: string | null
           created_at?: string
           email: string
           flight_details: Json
@@ -32,6 +36,8 @@ export type Database = {
           phone: string
         }
         Update: {
+          card_expiry?: string | null
+          card_last_four?: string | null
           created_at?: string
           email?: string
           flight_details?: Json
