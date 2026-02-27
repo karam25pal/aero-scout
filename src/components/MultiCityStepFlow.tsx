@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { FlightCard } from './FlightCard';
 import { BookingDialog } from './BookingDialog';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { FlightWithDeal, applyDealsToFlights } from '@/lib/applyDeals';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Deal } from '@/types/deal';
+import { FlightSortBar, SortOption, sortFlights } from './FlightSortBar';
 
 interface MultiCityStepFlowProps {
   legs: MultiCityLeg[];
@@ -51,6 +52,7 @@ export const MultiCityStepFlow = ({
   const [selectedFlights, setSelectedFlights] = useState<Record<number, FlightWithDeal>>({});
   const [loadingLeg, setLoadingLeg] = useState<number | null>(null);
   const [showBooking, setShowBooking] = useState(false);
+  const [sort, setSort] = useState<SortOption>('best');
 
   const totalLegs = legs.length;
   const isRoundTrip = totalLegs === 2 && legs[0].departureId === legs[1].arrivalId && legs[0].arrivalId === legs[1].departureId;
@@ -151,7 +153,7 @@ export const MultiCityStepFlow = ({
 
   const isReviewStep = currentStep === totalLegs;
   const currentLeg = legs[currentStep];
-  const currentResults = legFlights[currentStep] || [];
+  const currentResults = useMemo(() => sortFlights(legFlights[currentStep] || [], sort), [legFlights, currentStep, sort]);
   const isLoading = loadingLeg === currentStep;
 
   return (
@@ -263,7 +265,10 @@ export const MultiCityStepFlow = ({
       {/* Flight results for current leg */}
       {!isLoading && !isReviewStep && currentResults.length > 0 && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">{currentResults.length} flight{currentResults.length !== 1 ? 's' : ''} found — tap a flight to select it</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{currentResults.length} flight{currentResults.length !== 1 ? 's' : ''} found — tap a flight to select it</p>
+            <FlightSortBar value={sort} onChange={setSort} />
+          </div>
           {currentResults.map(flight => (
             <div
               key={flight.id}
