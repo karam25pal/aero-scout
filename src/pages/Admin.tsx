@@ -14,6 +14,7 @@ import { AirportAutocomplete } from '@/components/AirportAutocomplete';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
+import { BookingLeadsManager } from '@/components/BookingLeadsManager';
 
 type DealForm = {
   title: string;
@@ -46,17 +47,28 @@ const Admin = () => {
   const [leads, setLeads] = useState<any[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
 
+  const fetchLeads = async () => {
+    setLeadsLoading(true);
+    const { data } = await supabase
+      .from('booking_leads')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setLeads(data || []);
+    setLeadsLoading(false);
+  };
+
   useEffect(() => {
-    const fetchLeads = async () => {
-      const { data } = await supabase
-        .from('booking_leads')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setLeads(data || []);
-      setLeadsLoading(false);
-    };
     if (user && isAdmin) fetchLeads();
   }, [user, isAdmin]);
+
+  // Handle deep link to specific booking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bookingNum = params.get('booking');
+    if (bookingNum && leads.length > 0) {
+      // Auto-switch to leads tab — handled by defaultValue below
+    }
+  }, [leads]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/admin/login');
@@ -149,8 +161,8 @@ const Admin = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-5xl">
-        <Tabs defaultValue="deals">
+      <main className="container mx-auto px-4 py-8 max-w-6xl">
+        <Tabs defaultValue={new URLSearchParams(window.location.search).get('booking') ? 'leads' : 'deals'}>
           <TabsList className="mb-6">
             <TabsTrigger value="deals" className="gap-2"><Tag className="h-4 w-4" /> Deals</TabsTrigger>
             <TabsTrigger value="leads" className="gap-2"><Users className="h-4 w-4" /> Booking Leads</TabsTrigger>
@@ -251,45 +263,10 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="leads">
-            <h2 className="text-2xl font-bold text-foreground flex items-center gap-2 mb-6">
-              <Users className="h-6 w-6 text-primary" /> Booking Leads
-            </h2>
             {leadsLoading ? (
               <p className="text-muted-foreground text-center py-16">Loading leads...</p>
-            ) : leads.length === 0 ? (
-              <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
-                <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">No leads yet</h3>
-                <p className="text-muted-foreground">Leads will appear here when customers request callbacks.</p>
-              </div>
             ) : (
-              <div className="space-y-4">
-                {leads.map((lead: any) => {
-                  const fd = lead.flight_details || {};
-                  return (
-                    <div key={lead.id} className="bg-card rounded-xl p-6 border border-border/50 card-shadow">
-                      <div className="flex flex-col md:flex-row md:items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground">{lead.full_name}</h3>
-                          <p className="text-sm text-muted-foreground">{lead.email} · {lead.phone}</p>
-                          {(lead.card_last_four || lead.card_expiry) && (
-                            <p className="text-sm text-muted-foreground mt-0.5">
-                              💳 **** {lead.card_last_four || '????'}{lead.card_expiry ? ` · Exp: ${lead.card_expiry}` : ''}
-                            </p>
-                          )}
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {fd.airline && `${fd.airline} · `}{fd.origin} → {fd.destination} · {fd.price}
-                            {fd.deal && ` · Deal: ${fd.deal}`}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground shrink-0">
-                          {new Date(lead.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <BookingLeadsManager leads={leads} onRefresh={fetchLeads} />
             )}
           </TabsContent>
         </Tabs>

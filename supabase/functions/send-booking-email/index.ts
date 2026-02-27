@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { fullName, email, phone, flightDetails, cardLastFour, cardExpiry } = await req.json();
+    const { fullName, email, phone, flightDetails, cardLastFour, cardExpiry, bookingNumber } = await req.json();
     const apiKey = Deno.env.get('RESEND_API_KEY');
     if (!apiKey) {
       console.error('RESEND_API_KEY not set');
@@ -20,7 +20,9 @@ Deno.serve(async (req) => {
     }
 
     const fd = flightDetails || {};
-    const adminUrl = 'https://aero-scout.lovable.app/admin';
+    const adminUrl = bookingNumber 
+      ? `https://aero-scout.lovable.app/admin?booking=${bookingNumber}`
+      : 'https://aero-scout.lovable.app/admin';
     const htmlBody = `
       <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
         <div style="background:linear-gradient(135deg,#0891b2,#0284c7);padding:28px 24px;text-align:center;">
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: 'AeroScout <onboarding@resend.dev>',
         to: ['sswahegurujisswaheguruji11397@gmail.com'],
-        subject: `✈️ New Booking: ${fullName} — ${fd.origin || ''} → ${fd.destination || ''}`,
+        subject: `✈️ Booking ${bookingNumber || ''}: ${fullName} — ${fd.origin || ''} → ${fd.destination || ''}`,
         html: htmlBody,
       }),
     });
