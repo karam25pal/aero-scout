@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { FlightWithDeal } from '@/lib/applyDeals';
 import { LayoverMap } from '@/components/LayoverMap';
 import { BookingDialog } from '@/components/BookingDialog';
+import { MultiCityReviewDialog } from '@/components/MultiCityReviewDialog';
 
 interface FlightCardProps {
   flight: FlightWithDeal;
@@ -36,9 +37,11 @@ const getAirlineLogo = (name: string, logoUrl: string): string => {
 
 export const FlightCard = ({ flight }: FlightCardProps) => {
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const leg = flight.legs[0];
   const carrier = leg.carriers.marketing[0];
+  const isMultiCity = flight.legs.length > 2;
   const deal = flight.deal;
   const formatDate = (dateString: string) => {
     if (!dateString || /^\d{1,2}:\d{2}$/.test(dateString)) return '';
@@ -144,13 +147,13 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
           <div className="flex-1 space-y-4">
             {renderLeg(leg)}
 
-            {/* Return leg */}
-            {flight.legs.length > 1 && (
-              <>
+            {/* Additional legs (return or multi-city) */}
+            {flight.legs.slice(1).map((extraLeg, i) => (
+              <div key={i}>
                 <div className="border-t border-dashed border-border/50 my-1" />
-                {renderLeg(flight.legs[1], true)}
-              </>
-            )}
+                {renderLeg(extraLeg, flight.legs.length === 2 && i === 0)}
+              </div>
+            ))}
           </div>
 
           {/* Price & Actions */}
@@ -177,9 +180,9 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
                 variant="sky"
                 size="sm"
                 className="w-full font-semibold text-sm h-9 rounded-xl shadow-md hover:shadow-lg transition-all"
-                onClick={() => setBookingOpen(true)}
+                onClick={() => isMultiCity ? setReviewOpen(true) : setBookingOpen(true)}
               >
-                Book Now
+                {isMultiCity ? 'Review & Book' : 'Book Now'}
               </Button>
               <Button
                 variant="ghost"
@@ -247,7 +250,8 @@ export const FlightCard = ({ flight }: FlightCardProps) => {
         )}
       </div>
 
-      <BookingDialog flight={flight} open={bookingOpen} onOpenChange={setBookingOpen} />
+      {!isMultiCity && <BookingDialog flight={flight} open={bookingOpen} onOpenChange={setBookingOpen} />}
+      {isMultiCity && <MultiCityReviewDialog flight={flight} open={reviewOpen} onOpenChange={setReviewOpen} />}
     </div>
   );
 };
