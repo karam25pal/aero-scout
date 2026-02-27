@@ -11,6 +11,9 @@ import { MultiCityReviewDialog } from '@/components/MultiCityReviewDialog';
 interface FlightCardProps {
   flight: FlightWithDeal;
   isMultiCity?: boolean;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (flight: FlightWithDeal) => void;
 }
 
 const formatDuration = (minutes: number): string => {
@@ -36,7 +39,7 @@ const getAirlineLogo = (name: string, logoUrl: string): string => {
   return `https://logo.clearbit.com/${cleanName}.com`;
 };
 
-export const FlightCard = ({ flight, isMultiCity = false }: FlightCardProps) => {
+export const FlightCard = ({ flight, isMultiCity = false, selectionMode = false, isSelected = false, onSelect }: FlightCardProps) => {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -176,14 +179,25 @@ export const FlightCard = ({ flight, isMultiCity = false }: FlightCardProps) => 
               {flight.tags && flight.tags.includes('fastest') && (
                 <Badge variant="secondary" className="bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 text-[10px] justify-center">Fastest</Badge>
               )}
-              <Button
-                variant="sky"
-                size="sm"
-                className="w-full font-semibold text-sm h-9 rounded-xl shadow-md hover:shadow-lg transition-all"
-                onClick={() => isMultiCity ? setReviewOpen(true) : setBookingOpen(true)}
-              >
-                {isMultiCity ? 'Review & Book' : 'Book Now'}
-              </Button>
+              {selectionMode ? (
+                <Button
+                  variant={isSelected ? "default" : "sky"}
+                  size="sm"
+                  className="w-full font-semibold text-sm h-9 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  onClick={(e) => { e.stopPropagation(); onSelect?.(flight); }}
+                >
+                  {isSelected ? '✓ Selected' : 'Select'}
+                </Button>
+              ) : (
+                <Button
+                  variant="sky"
+                  size="sm"
+                  className="w-full font-semibold text-sm h-9 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  onClick={() => isMultiCity ? setReviewOpen(true) : setBookingOpen(true)}
+                >
+                  {isMultiCity ? 'Review & Book' : 'Book Now'}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

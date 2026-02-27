@@ -265,14 +265,18 @@ export const MultiCityStepFlow = ({
           {currentResults.map(flight => (
             <div
               key={flight.id}
-              className={`cursor-pointer transition-all rounded-2xl ${
+              className={`transition-all rounded-2xl ${
                 selectedFlights[currentStep]?.id === flight.id
                   ? 'ring-2 ring-primary shadow-lg'
-                  : 'hover:ring-1 hover:ring-primary/30'
+                  : ''
               }`}
-              onClick={() => handleSelectFlight(flight)}
             >
-              <FlightCard flight={flight} />
+              <FlightCard
+                flight={flight}
+                selectionMode
+                isSelected={selectedFlights[currentStep]?.id === flight.id}
+                onSelect={handleSelectFlight}
+              />
             </div>
           ))}
         </div>
