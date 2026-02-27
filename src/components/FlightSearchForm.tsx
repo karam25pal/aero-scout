@@ -183,7 +183,19 @@ export const FlightSearchForm = ({ onSearch, isLoading }: FlightSearchFormProps)
   };
 
   const updateMultiCityRow = (index: number, updates: Partial<MultiCityRow>) => {
-    setMultiCityRows(prev => prev.map((row, i) => i === index ? { ...row, ...updates } : row));
+    setMultiCityRows(prev => {
+      const next = prev.map((row, i) => i === index ? { ...row, ...updates } : row);
+      // Auto-fill next leg's origin when destination is set
+      if (updates.selectedDestination && index < next.length - 1) {
+        const dest = updates.selectedDestination;
+        next[index + 1] = {
+          ...next[index + 1],
+          selectedOrigin: dest,
+          originQuery: `${dest.city} (${dest.iata})`,
+        };
+      }
+      return next;
+    });
   };
 
   const addMultiCityRow = () => {
