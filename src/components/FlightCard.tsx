@@ -30,12 +30,59 @@ const formatTime = (dateString: string): string => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
+// Known airline domain mappings for logo lookup
+const AIRLINE_DOMAINS: Record<string, string> = {
+  'british airways': 'britishairways.com',
+  'air india': 'airindia.com',
+  'emirates': 'emirates.com',
+  'qatar airways': 'qatarairways.com',
+  'singapore airlines': 'singaporeair.com',
+  'turkish airlines': 'turkishairlines.com',
+  'lufthansa': 'lufthansa.com',
+  'air france': 'airfrance.com',
+  'klm': 'klm.com',
+  'united airlines': 'united.com',
+  'delta air lines': 'delta.com',
+  'american airlines': 'aa.com',
+  'ryanair': 'ryanair.com',
+  'easyjet': 'easyjet.com',
+  'wizz air': 'wizzair.com',
+  'jet2': 'jet2.com',
+  'flydubai': 'flydubai.com',
+  'etihad airways': 'etihad.com',
+  'virgin atlantic': 'virginatlantic.com',
+  'swiss': 'swiss.com',
+  'indigo': 'goindigo.in',
+  'spicejet': 'spicejet.com',
+  'cathay pacific': 'cathaypacific.com',
+  'thai airways': 'thaiairways.com',
+  'malaysia airlines': 'malaysiaairlines.com',
+  'air canada': 'aircanada.com',
+  'qantas': 'qantas.com',
+  'saudia': 'saudia.com',
+  'pegasus airlines': 'flypgs.com',
+  'tap portugal': 'flytap.com',
+  'lot polish airlines': 'lot.com',
+  'icelandair': 'icelandair.com',
+  'norwegian': 'norwegian.com',
+  'finnair': 'finnair.com',
+  'aer lingus': 'aerlingus.com',
+  'vueling': 'vueling.com',
+  'iberia': 'iberia.com',
+};
+
 const getAirlineLogo = (name: string, logoUrl: string): string => {
-  // HasData returns Google's logo URLs which may be blocked/expired
-  // Use a reliable logo CDN as fallback
+  // If provider gives a valid non-Google URL, use it
   if (logoUrl && !logoUrl.includes('gstatic.com/flights')) return logoUrl;
-  // Use airline IATA-style lookup via logo.clearbit.com or a known CDN
-  const cleanName = name?.toLowerCase().replace(/\s+/g, '').replace(/airlines?/gi, '');
+  
+  const lowerName = name?.toLowerCase().trim() || '';
+  
+  // Check known mappings first
+  const knownDomain = AIRLINE_DOMAINS[lowerName];
+  if (knownDomain) return `https://logo.clearbit.com/${knownDomain}`;
+  
+  // Fallback: try cleaning the name
+  const cleanName = lowerName.replace(/\s+(airlines?|airways?|air)\s*/gi, '').replace(/\s+/g, '');
   return `https://logo.clearbit.com/${cleanName}.com`;
 };
 
