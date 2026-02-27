@@ -240,9 +240,9 @@ export const FlightCard = ({ flight, isMultiCity = false, selectionMode = false,
                   variant="sky"
                   size="sm"
                   className="w-full font-semibold text-sm h-9 rounded-xl shadow-md hover:shadow-lg transition-all"
-                  onClick={() => isMultiCity ? setReviewOpen(true) : setBookingOpen(true)}
+                  onClick={() => (isMultiCity || flight.legs.length > 1) ? setReviewOpen(true) : setBookingOpen(true)}
                 >
-                  {isMultiCity ? 'Review & Book' : 'Book Now'}
+                  {(isMultiCity || flight.legs.length > 1) ? 'Review & Book' : 'Book Now'}
                 </Button>
               )}
               <Button
@@ -311,8 +311,8 @@ export const FlightCard = ({ flight, isMultiCity = false, selectionMode = false,
         )}
       </div>
 
-      {!isMultiCity && <BookingDialog flight={flight} open={bookingOpen} onOpenChange={setBookingOpen} />}
-      {isMultiCity && <MultiCityReviewDialog flight={flight} open={reviewOpen} onOpenChange={setReviewOpen} />}
+      {!isMultiCity && flight.legs.length <= 1 && <BookingDialog flight={flight} open={bookingOpen} onOpenChange={setBookingOpen} />}
+      {(isMultiCity || flight.legs.length > 1) && <MultiCityReviewDialog flight={flight} open={reviewOpen} onOpenChange={setReviewOpen} />}
     </div>
   );
 };
