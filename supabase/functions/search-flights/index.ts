@@ -129,18 +129,34 @@ Deno.serve(async (req) => {
     console.log(`HasData flight search: ${effectiveOrigin} → ${effectiveDest} on ${isMultiCity ? 'multi-city' : date}`);
     console.log('API URL:', url.toString().replace(apiKey, '***'));
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-    });
+    let response: Response | null = null;
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+      });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('HasData API error:', response.status, errText.slice(0, 500));
-      throw new Error(`API error: ${response.status}`);
+      if (response.status === 429 && attempt < maxRetries - 1) {
+        const waitMs = (attempt + 1) * 2000; // 2s, 4s
+        console.log(`Rate limited (429), retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+
+    if (!response || !response.ok) {
+      const errText = response ? await response.text() : 'No response';
+      const status = response?.status || 0;
+      console.error('HasData API error:', status, errText.slice(0, 500));
+      if (status === 429) {
+        throw new Error('Rate limit reached — please wait a minute and try again');
+      }
+      throw new Error(`API error: ${status}`);
     }
 
     const apiData = await response.json();
