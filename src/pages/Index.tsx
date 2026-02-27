@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Hero } from '@/components/Hero';
 import { FlightSearchForm } from '@/components/FlightSearchForm';
 import { FlightResults } from '@/components/FlightResults';
+import { MultiCityStepFlow } from '@/components/MultiCityStepFlow';
 import { DealsShowcase } from '@/components/DealsShowcase';
-import { SearchParams, FlightResult } from '@/types/flight';
+import { SearchParams, FlightResult, MultiCityLeg } from '@/types/flight';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useActiveDeals } from '@/hooks/useDeals';
@@ -25,17 +26,43 @@ const Index = () => {
   const [lastParams, setLastParams] = useState<SearchParams | null>(null);
   const [meta, setMeta] = useState<FlightSearchMeta | null>(null);
   const [isMultiCitySearch, setIsMultiCitySearch] = useState(false);
+  const [multiCityConfig, setMultiCityConfig] = useState<{
+    legs: MultiCityLeg[];
+    cabinClass: string;
+    adults: number;
+    children: number;
+    infants: number;
+    stops?: string;
+  } | null>(null);
   const { toast } = useToast();
   const { deals } = useActiveDeals();
 
   const handleSearch = async (params: SearchParams) => {
+    // Multi-city: use step-by-step flow instead of combined search
+    if (params.tripType === 'multi-city' && params.multiCityLegs && params.multiCityLegs.length >= 2) {
+      setIsMultiCitySearch(true);
+      setHasSearched(true);
+      setMultiCityConfig({
+        legs: params.multiCityLegs,
+        cabinClass: params.cabinClass,
+        adults: params.adults,
+        children: params.children,
+        infants: params.infants,
+        stops: params.stops,
+      });
+      setFlights([]);
+      setRawFlights([]);
+      return;
+    }
+
+    setIsMultiCitySearch(false);
+    setMultiCityConfig(null);
     setIsLoading(true);
     setHasSearched(true);
     setFlights([]);
     setRawFlights([]);
     setLastParams(params);
     setMeta(null);
-    setIsMultiCitySearch(params.tripType === 'multi-city');
 
     try {
       const { data, error } = await supabase.functions.invoke('search-flights', { body: params });
@@ -119,23 +146,45 @@ const Index = () => {
 
         {/* Results */}
         <div className="container mx-auto px-4 pb-16">
-          <FlightResults
-            flights={flights}
-            isLoading={isLoading}
-            totalCount={meta?.totalCount}
-            hasNextPage={meta?.hasNextPage}
-            isLoadingMore={isLoadingMore}
-            onLoadMore={handleLoadMore}
-            isMultiCity={isMultiCitySearch}
-          />
-          {!isLoading && hasSearched && flights.length === 0 && (
-            <div className="w-full max-w-5xl mx-auto mt-8">
-              <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
-                <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">No flights found</h3>
-                <p className="text-muted-foreground">Try different dates or destinations</p>
-              </div>
-            </div>
+          {/* Multi-city step flow */}
+          {isMultiCitySearch && multiCityConfig && (
+            <MultiCityStepFlow
+              legs={multiCityConfig.legs}
+              cabinClass={multiCityConfig.cabinClass}
+              adults={multiCityConfig.adults}
+              children={multiCityConfig.children}
+              infants={multiCityConfig.infants}
+              stops={multiCityConfig.stops}
+              deals={deals}
+              onReset={() => {
+                setIsMultiCitySearch(false);
+                setMultiCityConfig(null);
+                setHasSearched(false);
+              }}
+            />
+          )}
+
+          {/* Regular results */}
+          {!isMultiCitySearch && (
+            <>
+              <FlightResults
+                flights={flights}
+                isLoading={isLoading}
+                totalCount={meta?.totalCount}
+                hasNextPage={meta?.hasNextPage}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={handleLoadMore}
+              />
+              {!isLoading && hasSearched && flights.length === 0 && (
+                <div className="w-full max-w-5xl mx-auto mt-8">
+                  <div className="text-center py-16 bg-card rounded-2xl border border-border/50">
+                    <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground mb-2">No flights found</h3>
+                    <p className="text-muted-foreground">Try different dates or destinations</p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
