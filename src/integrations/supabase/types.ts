@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       booking_leads: {
         Row: {
+          admin_notes: Json | null
+          booking_number: string | null
           card_expiry: string | null
           card_last_four: string | null
           created_at: string
@@ -24,8 +26,11 @@ export type Database = {
           full_name: string
           id: string
           phone: string
+          status: string
         }
         Insert: {
+          admin_notes?: Json | null
+          booking_number?: string | null
           card_expiry?: string | null
           card_last_four?: string | null
           created_at?: string
@@ -34,8 +39,11 @@ export type Database = {
           full_name: string
           id?: string
           phone: string
+          status?: string
         }
         Update: {
+          admin_notes?: Json | null
+          booking_number?: string | null
           card_expiry?: string | null
           card_last_four?: string | null
           created_at?: string
@@ -44,6 +52,7 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string
+          status?: string
         }
         Relationships: []
       }
