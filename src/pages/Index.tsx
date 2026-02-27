@@ -38,7 +38,39 @@ const Index = () => {
   const { deals } = useActiveDeals();
 
   const handleSearch = async (params: SearchParams) => {
-    // Multi-city: use step-by-step flow instead of combined search
+    // Round-trip: convert to 2-leg step flow (outbound + return)
+    if (params.tripType === 'round-trip' && params.returnDate) {
+      setIsMultiCitySearch(true);
+      setHasSearched(true);
+      setMultiCityConfig({
+        legs: [
+          {
+            departureId: params.originSkyId,
+            arrivalId: params.destinationSkyId,
+            date: params.date,
+            originLabel: params.originSkyId,
+            destinationLabel: params.destinationSkyId,
+          },
+          {
+            departureId: params.destinationSkyId,
+            arrivalId: params.originSkyId,
+            date: params.returnDate,
+            originLabel: params.destinationSkyId,
+            destinationLabel: params.originSkyId,
+          },
+        ],
+        cabinClass: params.cabinClass,
+        adults: params.adults,
+        children: params.children,
+        infants: params.infants,
+        stops: params.stops,
+      });
+      setFlights([]);
+      setRawFlights([]);
+      return;
+    }
+
+    // Multi-city: use step-by-step flow
     if (params.tripType === 'multi-city' && params.multiCityLegs && params.multiCityLegs.length >= 2) {
       setIsMultiCitySearch(true);
       setHasSearched(true);
