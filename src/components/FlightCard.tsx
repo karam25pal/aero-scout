@@ -10,6 +10,7 @@ import { MultiCityReviewDialog } from '@/components/MultiCityReviewDialog';
 
 interface FlightCardProps {
   flight: FlightWithDeal;
+  isMultiCity?: boolean;
 }
 
 const formatDuration = (minutes: number): string => {
@@ -35,13 +36,12 @@ const getAirlineLogo = (name: string, logoUrl: string): string => {
   return `https://logo.clearbit.com/${cleanName}.com`;
 };
 
-export const FlightCard = ({ flight }: FlightCardProps) => {
+export const FlightCard = ({ flight, isMultiCity = false }: FlightCardProps) => {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const leg = flight.legs[0];
   const carrier = leg.carriers.marketing[0];
-  const isMultiCity = flight.legs.length > 2;
   const deal = flight.deal;
   const formatDate = (dateString: string) => {
     if (!dateString || /^\d{1,2}:\d{2}$/.test(dateString)) return '';
