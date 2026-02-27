@@ -30,58 +30,102 @@ const formatTime = (dateString: string): string => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
-// Known airline domain mappings for logo lookup
-const AIRLINE_DOMAINS: Record<string, string> = {
-  'british airways': 'britishairways.com',
-  'air india': 'airindia.com',
-  'emirates': 'emirates.com',
-  'qatar airways': 'qatarairways.com',
-  'singapore airlines': 'singaporeair.com',
-  'turkish airlines': 'turkishairlines.com',
-  'lufthansa': 'lufthansa.com',
-  'air france': 'airfrance.com',
-  'klm': 'klm.com',
-  'united airlines': 'united.com',
-  'delta air lines': 'delta.com',
-  'american airlines': 'aa.com',
-  'ryanair': 'ryanair.com',
-  'easyjet': 'easyjet.com',
-  'wizz air': 'wizzair.com',
-  'jet2': 'jet2.com',
-  'flydubai': 'flydubai.com',
-  'etihad airways': 'etihad.com',
-  'virgin atlantic': 'virginatlantic.com',
-  'swiss': 'swiss.com',
-  'indigo': 'goindigo.in',
-  'spicejet': 'spicejet.com',
-  'cathay pacific': 'cathaypacific.com',
-  'thai airways': 'thaiairways.com',
-  'malaysia airlines': 'malaysiaairlines.com',
-  'air canada': 'aircanada.com',
-  'qantas': 'qantas.com',
-  'saudia': 'saudia.com',
-  'pegasus airlines': 'flypgs.com',
-  'tap portugal': 'flytap.com',
-  'lot polish airlines': 'lot.com',
-  'icelandair': 'icelandair.com',
-  'norwegian': 'norwegian.com',
-  'finnair': 'finnair.com',
-  'aer lingus': 'aerlingus.com',
-  'vueling': 'vueling.com',
-  'iberia': 'iberia.com',
+// Airline name → ICAO code mapping for GitHub logo repo
+const AIRLINE_ICAO: Record<string, string> = {
+  'british airways': 'BAW',
+  'air india': 'AIC',
+  'emirates': 'UAE',
+  'qatar airways': 'QTR',
+  'singapore airlines': 'SIA',
+  'turkish airlines': 'THY',
+  'lufthansa': 'DLH',
+  'air france': 'AFR',
+  'klm': 'KLM',
+  'united airlines': 'UAL',
+  'delta air lines': 'DAL',
+  'american airlines': 'AAL',
+  'ryanair': 'RYR',
+  'easyjet': 'EZY',
+  'wizz air': 'WZZ',
+  'jet2': 'EXS',
+  'flydubai': 'FDB',
+  'etihad airways': 'ETD',
+  'virgin atlantic': 'VIR',
+  'swiss': 'SWR',
+  'indigo': 'IGO',
+  'spicejet': 'SEJ',
+  'cathay pacific': 'CPA',
+  'thai airways': 'THA',
+  'malaysia airlines': 'MAS',
+  'air canada': 'ACA',
+  'qantas': 'QFA',
+  'saudia': 'SVA',
+  'pegasus airlines': 'PGT',
+  'tap portugal': 'TAP',
+  'lot polish airlines': 'LOT',
+  'icelandair': 'ICE',
+  'norwegian': 'NAX',
+  'finnair': 'FIN',
+  'aer lingus': 'EIN',
+  'vueling': 'VLG',
+  'iberia': 'IBE',
+  'japan airlines': 'JAL',
+  'ana': 'ANA',
+  'korean air': 'KAL',
+  'china southern': 'CSN',
+  'china eastern': 'CES',
+  'air china': 'CCA',
+  'garuda indonesia': 'GIA',
+  'vietnam airlines': 'HVN',
+  'south african airways': 'SAA',
+  'kenya airways': 'KQA',
+  'ethiopian airlines': 'ETH',
+  'air new zealand': 'ANZ',
+  'jetblue': 'JBU',
+  'southwest airlines': 'SWA',
+  'spirit airlines': 'NKS',
+  'frontier airlines': 'FFT',
+  'alaska airlines': 'ASA',
+  'westjet': 'WJA',
+  'aegean airlines': 'AEE',
+  'air europa': 'AEA',
+  'condor': 'CFG',
+  'eurowings': 'EWG',
+  'sun country airlines': 'SCX',
+  'allegiant air': 'AAY',
+  'air transat': 'TSC',
+  'sunwing airlines': 'SWG',
+  'air baltic': 'BTI',
+  'brussels airlines': 'BEL',
+  'austrian airlines': 'AUA',
+  'air serbia': 'ASL',
+  'croatia airlines': 'CTN',
+  'czech airlines': 'CSA',
+  'air malta': 'AMC',
+  'tarom': 'ROT',
+  'flynas': 'KNE',
+  'gulf air': 'GFA',
+  'oman air': 'OMA',
+  'royal jordanian': 'RJA',
+  'middle east airlines': 'MEA',
+  'egyptair': 'MSR',
+  'royal air maroc': 'RAM',
+  'tunisair': 'TAR',
 };
 
+const GITHUB_LOGO_BASE = 'https://raw.githubusercontent.com/sexym0nk3y/airline-logos/main/logos';
+
 const getAirlineLogo = (name: string, logoUrl: string): string => {
-  // If provider gives a valid non-Google URL, use it
-  if (logoUrl && !logoUrl.includes('gstatic.com/flights')) return logoUrl;
-  
   const lowerName = name?.toLowerCase().trim() || '';
-  
-  // Check known mappings first
-  const knownDomain = AIRLINE_DOMAINS[lowerName];
-  if (knownDomain) return `https://logo.clearbit.com/${knownDomain}`;
-  
-  // Fallback: try cleaning the name
+
+  // Try ICAO-based GitHub logo first
+  const icao = AIRLINE_ICAO[lowerName];
+  if (icao) return `${GITHUB_LOGO_BASE}/${icao}.png`;
+
+  // If provider gives a valid non-Google URL, use it as fallback
+  if (logoUrl && !logoUrl.includes('gstatic.com/flights')) return logoUrl;
+
+  // Last fallback: Clearbit
   const cleanName = lowerName.replace(/\s+(airlines?|airways?|air)\s*/gi, '').replace(/\s+/g, '');
   return `https://logo.clearbit.com/${cleanName}.com`;
 };
