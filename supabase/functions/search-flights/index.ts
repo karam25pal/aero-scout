@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
       infants = 0,
       stops,
       tripType,
+      multiCityLegs,
       // Pagination via departureToken
       departureToken,
       bookingToken,
@@ -47,7 +48,10 @@ Deno.serve(async (req) => {
     const origin = originSkyId || originEntityId;
     const destination = destinationSkyId || destinationEntityId;
 
-    if (!origin || !destination || !date) {
+    // Multi-city doesn't need origin/destination/date in the same way
+    const isMultiCity = tripType === 'multi-city' && Array.isArray(multiCityLegs) && multiCityLegs.length >= 2;
+
+    if (!isMultiCity && (!origin || !destination || !date)) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing required parameters', data: [] }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -64,16 +68,33 @@ Deno.serve(async (req) => {
 
     // Build URL
     const url = new URL(HASDATA_BASE);
-    url.searchParams.set('departureId', origin);
-    url.searchParams.set('arrivalId', destination);
-    url.searchParams.set('outboundDate', date);
-    
-    // Trip type
-    const resolvedType = tripType === 'one-way' ? 'oneWay' : 'roundTrip';
-    url.searchParams.set('type', resolvedType);
-    
-    if (returnDate && resolvedType === 'roundTrip') {
-      url.searchParams.set('returnDate', returnDate);
+
+    if (isMultiCity) {
+      // Multi-city: use first/last leg for departureId/arrivalId, set type=multiCity
+      url.searchParams.set('departureId', multiCityLegs[0].departureId);
+      url.searchParams.set('arrivalId', multiCityLegs[multiCityLegs.length - 1].arrivalId);
+      url.searchParams.set('outboundDate', multiCityLegs[0].date);
+      url.searchParams.set('type', 'multiCity');
+      
+      // Build multiCityJson
+      const multiCityJson = multiCityLegs.map((leg: any) => ({
+        departureId: leg.departureId,
+        arrivalId: leg.arrivalId,
+        date: leg.date,
+      }));
+      url.searchParams.set('multiCityJson', JSON.stringify(multiCityJson));
+    } else {
+      url.searchParams.set('departureId', origin);
+      url.searchParams.set('arrivalId', destination);
+      url.searchParams.set('outboundDate', date);
+      
+      // Trip type
+      const resolvedType = tripType === 'one-way' ? 'oneWay' : 'roundTrip';
+      url.searchParams.set('type', resolvedType);
+      
+      if (returnDate && resolvedType === 'roundTrip') {
+        url.searchParams.set('returnDate', returnDate);
+      }
     }
 
     url.searchParams.set('travelClass', CABIN_CLASS_MAP[cabinClass] || 'Economy');
@@ -88,7 +109,7 @@ Deno.serve(async (req) => {
     url.searchParams.set('showHidden', 'true');
     url.searchParams.set('deepSearch', 'true');
 
-    // Stops filter - map numeric values to HasData API string values
+    // Stops filter
     if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
       const mappedStops = STOPS_MAP[String(stops)] || String(stops);
       url.searchParams.set('stops', mappedStops);
@@ -102,7 +123,10 @@ Deno.serve(async (req) => {
       url.searchParams.set('bookingToken', bookingToken);
     }
 
-    console.log(`HasData flight search: ${origin} → ${destination} on ${date}`);
+    const effectiveOrigin = isMultiCity ? multiCityLegs[0].departureId : origin;
+    const effectiveDest = isMultiCity ? multiCityLegs[multiCityLegs.length - 1].arrivalId : destination;
+
+    console.log(`HasData flight search: ${effectiveOrigin} → ${effectiveDest} on ${isMultiCity ? 'multi-city' : date}`);
     console.log('API URL:', url.toString().replace(apiKey, '***'));
 
     const response = await fetch(url.toString(), {
@@ -122,8 +146,7 @@ Deno.serve(async (req) => {
     const apiData = await response.json();
     console.log('HasData response keys:', Object.keys(apiData));
 
-    // Transform HasData response to our internal format
-    let flights = transformHasDataResponse(apiData, origin, destination);
+    let flights = transformHasDataResponse(apiData, effectiveOrigin, effectiveDest);
 
     // Client-side stops filter (API doesn't always respect the stops param)
     if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
