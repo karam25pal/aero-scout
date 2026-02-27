@@ -5,14 +5,14 @@ const corsHeaders = {
 
 const HASDATA_BASE = 'https://api.hasdata.com/scrape/google/flights';
 
-const CABIN_CLASS_MAP: Record<string, string> = {
+const CABIN_CLASS_MAP = {
   economy: 'economy',
   premium_economy: 'premiumEconomy',
   business: 'business',
   first: 'first',
 };
 
-const STOPS_MAP: Record<string, string> = {
+const STOPS_MAP = {
   '0': 'nonStop',
   '1': 'oneStopOrFewer',
   '2': 'twoStopsOrFewer',
@@ -39,16 +39,13 @@ Deno.serve(async (req) => {
       stops,
       tripType,
       multiCityLegs,
-      // Pagination via departureToken
       departureToken,
       bookingToken,
     } = body;
 
-    // Use IATA codes preferably
     const origin = originSkyId || originEntityId;
     const destination = destinationSkyId || destinationEntityId;
 
-    // Multi-city doesn't need origin/destination/date in the same way
     const isMultiCity = tripType === 'multi-city' && Array.isArray(multiCityLegs) && multiCityLegs.length >= 2;
 
     if (!isMultiCity && (!origin || !destination || !date)) {
@@ -66,18 +63,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build URL
     const url = new URL(HASDATA_BASE);
 
     if (isMultiCity) {
-      // Multi-city: use first/last leg for departureId/arrivalId, set type=multiCity
       url.searchParams.set('departureId', multiCityLegs[0].departureId);
       url.searchParams.set('arrivalId', multiCityLegs[multiCityLegs.length - 1].arrivalId);
       url.searchParams.set('outboundDate', multiCityLegs[0].date);
       url.searchParams.set('type', 'multiCity');
       
-      // Build multiCityJson
-      const multiCityJson = multiCityLegs.map((leg: any) => ({
+      const multiCityJson = multiCityLegs.map((leg) => ({
         departureId: leg.departureId,
         arrivalId: leg.arrivalId,
         date: leg.date,
@@ -88,7 +82,6 @@ Deno.serve(async (req) => {
       url.searchParams.set('arrivalId', destination);
       url.searchParams.set('outboundDate', date);
       
-      // Trip type - fall back to oneWay if round-trip but no return date
       const resolvedType = (tripType === 'one-way' || !returnDate) ? 'oneWay' : 'roundTrip';
       url.searchParams.set('type', resolvedType);
       
@@ -105,17 +98,14 @@ Deno.serve(async (req) => {
     if (children > 0) url.searchParams.set('children', String(children));
     if (infants > 0) url.searchParams.set('infantsOnLap', String(infants));
     
-    // Always show hidden fares and deep search
     url.searchParams.set('showHidden', 'true');
     url.searchParams.set('deepSearch', 'true');
 
-    // Stops filter
     if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
       const mappedStops = STOPS_MAP[String(stops)] || String(stops);
       url.searchParams.set('stops', mappedStops);
     }
 
-    // Departure token for pagination / return flights
     if (departureToken) {
       url.searchParams.set('departureToken', departureToken);
     }
@@ -129,7 +119,7 @@ Deno.serve(async (req) => {
     console.log(`HasData flight search: ${effectiveOrigin} → ${effectiveDest} on ${isMultiCity ? 'multi-city' : date}`);
     console.log('API URL:', url.toString().replace(apiKey, '***'));
 
-    let response: Response | null = null;
+    let response = null;
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       response = await fetch(url.toString(), {
@@ -141,7 +131,7 @@ Deno.serve(async (req) => {
       });
 
       if (response.status === 429 && attempt < maxRetries - 1) {
-        const waitMs = (attempt + 1) * 2000; // 2s, 4s
+        const waitMs = (attempt + 1) * 2000;
         console.log(`Rate limited (429), retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
         await new Promise(r => setTimeout(r, waitMs));
         continue;
@@ -164,17 +154,16 @@ Deno.serve(async (req) => {
 
     let flights = transformHasDataResponse(apiData, effectiveOrigin, effectiveDest);
 
-    // Client-side stops filter (API doesn't always respect the stops param)
     if (stops !== undefined && stops !== null && stops !== '' && stops !== 'any') {
       const maxStops = parseInt(String(stops), 10);
       if (!isNaN(maxStops)) {
-        flights = flights.filter((f: any) =>
-          f.legs.every((leg: any) => (leg.stopCount || 0) <= maxStops)
+        flights = flights.filter((f) =>
+          f.legs.every((leg) => (leg.stopCount || 0) <= maxStops)
         );
       }
     }
 
-    flights.sort((a: any, b: any) => a.price.raw - b.price.raw);
+    flights.sort((a, b) => a.price.raw - b.price.raw);
     console.log(`Returning ${flights.length} flights`);
 
     return new Response(
@@ -199,28 +188,23 @@ Deno.serve(async (req) => {
   }
 });
 
-function transformHasDataResponse(apiData: any, originCode: string, destCode: string): any[] {
-  const results: any[] = [];
+function transformHasDataResponse(apiData, originCode, destCode) {
+  const results = [];
 
-  // HasData returns data in various structures - handle them all
-  // Common: { bestFlights: [...], otherFlights: [...] }
-  // Or nested under data
   const data = apiData?.data || apiData;
   
-  const allFlightGroups: any[] = [];
+  const allFlightGroups = [];
   
   if (Array.isArray(data?.bestFlights)) allFlightGroups.push(...data.bestFlights);
   if (Array.isArray(data?.otherFlights)) allFlightGroups.push(...data.otherFlights);
   if (Array.isArray(data?.best_flights)) allFlightGroups.push(...data.best_flights);
   if (Array.isArray(data?.other_flights)) allFlightGroups.push(...data.other_flights);
   
-  // If top-level arrays
   if (Array.isArray(apiData?.bestFlights)) allFlightGroups.push(...apiData.bestFlights);
   if (Array.isArray(apiData?.otherFlights)) allFlightGroups.push(...apiData.otherFlights);
   if (Array.isArray(apiData?.best_flights)) allFlightGroups.push(...apiData.best_flights);
   if (Array.isArray(apiData?.other_flights)) allFlightGroups.push(...apiData.other_flights);
 
-  // Some APIs return flights directly as array
   if (Array.isArray(data)) allFlightGroups.push(...data);
 
   console.log(`Found ${allFlightGroups.length} flight groups to process`);
@@ -234,8 +218,7 @@ function transformHasDataResponse(apiData: any, originCode: string, destCode: st
   return results;
 }
 
-function transformSingleFlight(flight: any, index: number, originCode: string, destCode: string): any | null {
-  // Extract price - HasData Google Flights format
+function transformSingleFlight(flight, index, originCode, destCode) {
   let price = 0;
   if (typeof flight.price === 'number') {
     price = flight.price;
@@ -246,18 +229,16 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
   }
   if (!price || price <= 0) return null;
 
-  // Build legs from flights array (Google Flights structure)
-  const legs: any[] = [];
+  const legs = [];
   const segments = flight.flights || flight.legs || [];
   
   if (Array.isArray(segments) && segments.length > 0) {
-    // Collect airlines
-    const airlines = segments.map((s: any) => ({
+    const airlines = segments.map((s) => ({
       name: s.airline || s.carrier || 'Unknown',
       logoUrl: s.airline_logo || s.airlineLogo || '',
     }));
-    const uniqueAirlines: any[] = [];
-    const seen = new Set<string>();
+    const uniqueAirlines = [];
+    const seen = new Set();
     for (const a of airlines) {
       if (!seen.has(a.name)) { seen.add(a.name); uniqueAirlines.push(a); }
     }
@@ -265,12 +246,10 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
     const firstSeg = segments[0];
     const lastSeg = segments[segments.length - 1];
 
-    // Departure/arrival info
     const depAirport = firstSeg.departure_airport || firstSeg.departureAirport || {};
     const arrAirport = lastSeg.arrival_airport || lastSeg.arrivalAirport || {};
 
-    // Build segment details
-    const segmentDetails = segments.map((s: any) => {
+    const segmentDetails = segments.map((s) => {
       const depAp = s.departure_airport || s.departureAirport || {};
       const arrAp = s.arrival_airport || s.arrivalAirport || {};
       return {
@@ -284,8 +263,7 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
       };
     });
 
-    // Build layovers
-    const layoverList: any[] = [];
+    const layoverList = [];
     if (Array.isArray(flight.layovers)) {
       for (const lo of flight.layovers) {
         layoverList.push({
@@ -295,7 +273,6 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
         });
       }
     } else {
-      // Calculate from segments
       for (let j = 0; j < segments.length - 1; j++) {
         const arrAp2 = segments[j].arrival_airport || segments[j].arrivalAirport || {};
         const arrTime = arrAp2.time || segments[j].arrival_time || '';
@@ -316,7 +293,7 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
     }
 
     const totalDuration = flight.total_duration || flight.totalDuration || flight.duration?.raw || 
-      segments.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+      segments.reduce((sum, s) => sum + (s.duration || 0), 0);
     const stopCount = typeof flight.stops === 'number' ? flight.stops : 
       (layoverList.length > 0 ? layoverList.length : Math.max(0, segments.length - 1));
 
@@ -343,7 +320,6 @@ function transformSingleFlight(flight: any, index: number, originCode: string, d
       layovers: layoverList,
     });
   } else {
-    // Fallback for flat structure
     legs.push({
       origin: { name: originCode, displayCode: originCode, city: originCode },
       destination: { name: destCode, displayCode: destCode, city: destCode },
