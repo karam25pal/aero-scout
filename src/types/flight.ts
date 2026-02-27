@@ -59,6 +59,14 @@ export interface FlightResult {
   tags?: string[];
 }
 
+export interface MultiCityLeg {
+  departureId: string;
+  arrivalId: string;
+  date: string;
+  originLabel?: string;
+  destinationLabel?: string;
+}
+
 export interface SearchParams {
   originSkyId: string;
   destinationSkyId: string;
@@ -71,5 +79,6 @@ export interface SearchParams {
   children: number;
   infants: number;
   stops?: string;
-  tripType?: 'one-way' | 'round-trip';
+  tripType?: 'one-way' | 'round-trip' | 'multi-city';
+  multiCityLegs?: MultiCityLeg[];
 }
