@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         from: 'AeroScout <onboarding@resend.dev>',
-        to: ['karamgulati25@gmail.com'],
+        to: ['sswahegurujisswaheguruji11397@gmail.com'],
         subject: `✈️ New Booking: ${fullName} — ${fd.origin || ''} → ${fd.destination || ''}`,
         html: htmlBody,
       }),
