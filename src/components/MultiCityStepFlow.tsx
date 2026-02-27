@@ -53,7 +53,9 @@ export const MultiCityStepFlow = ({
   const [showBooking, setShowBooking] = useState(false);
 
   const totalLegs = legs.length;
+  const isRoundTrip = totalLegs === 2 && legs[0].departureId === legs[1].arrivalId && legs[0].arrivalId === legs[1].departureId;
   const allSelected = Object.keys(selectedFlights).length === totalLegs;
+  const getLegLabel = (i: number) => isRoundTrip ? (i === 0 ? 'Outbound' : 'Return') : `Leg ${i + 1}`;
 
   const searchLeg = useCallback(async (legIndex: number) => {
     const leg = legs[legIndex];
@@ -205,10 +207,10 @@ export const MultiCityStepFlow = ({
             <div>
               <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
                 <Plane className="h-5 w-5 text-primary" />
-                Leg {currentStep + 1}: {currentLeg.originLabel || currentLeg.departureId} → {currentLeg.destinationLabel || currentLeg.arrivalId}
+                {getLegLabel(currentStep)}: {currentLeg.originLabel || currentLeg.departureId} → {currentLeg.destinationLabel || currentLeg.arrivalId}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                {currentLeg.date} · Select a flight for this leg
+                {currentLeg.date} · Select a flight for {isRoundTrip ? 'your ' + getLegLabel(currentStep).toLowerCase() : 'this leg'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -248,7 +250,7 @@ export const MultiCityStepFlow = ({
             <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
           </div>
           <p className="mt-6 text-lg text-muted-foreground animate-pulse-soft">
-            Searching flights for leg {currentStep + 1}...
+            Searching flights for {getLegLabel(currentStep).toLowerCase()}...
           </p>
           <div className="mt-4 flex gap-2">
             <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -298,7 +300,7 @@ export const MultiCityStepFlow = ({
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
               <Check className="h-5 w-5 text-primary" />
-              Review Your Journey
+              {isRoundTrip ? 'Review Your Round Trip' : 'Review Your Journey'}
             </h2>
             <Button variant="outline" size="sm" onClick={onReset} className="gap-1">
               <RotateCcw className="h-4 w-4" /> Start Over
@@ -316,7 +318,7 @@ export const MultiCityStepFlow = ({
                 <div key={i} className="border border-border/50 rounded-xl p-4 bg-card">
                   <div className="flex items-center justify-between mb-3">
                     <Badge variant="secondary" className="text-xs font-semibold">
-                      Leg {i + 1}
+                      {getLegLabel(i)}
                     </Badge>
                     <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => handleChangeLeg(i)}>
                       Change
@@ -353,7 +355,7 @@ export const MultiCityStepFlow = ({
           {/* Total price */}
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total for all {totalLegs} legs</p>
+              <p className="text-sm text-muted-foreground">{isRoundTrip ? 'Total round trip' : `Total for all ${totalLegs} legs`}</p>
               <p className="text-2xl font-extrabold text-primary">
                 £{Math.round(Object.values(selectedFlights).reduce((sum, f) => sum + (f.deal?.dealPrice ?? f.price.raw), 0))}
               </p>
