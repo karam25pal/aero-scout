@@ -88,8 +88,8 @@ Deno.serve(async (req) => {
       url.searchParams.set('arrivalId', destination);
       url.searchParams.set('outboundDate', date);
       
-      // Trip type
-      const resolvedType = tripType === 'one-way' ? 'oneWay' : 'roundTrip';
+      // Trip type - fall back to oneWay if round-trip but no return date
+      const resolvedType = (tripType === 'one-way' || !returnDate) ? 'oneWay' : 'roundTrip';
       url.searchParams.set('type', resolvedType);
       
       if (returnDate && resolvedType === 'roundTrip') {
