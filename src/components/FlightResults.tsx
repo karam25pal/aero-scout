@@ -4,6 +4,7 @@ import { Plane, Tag, Filter, Search, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FlightWithDeal } from '@/lib/applyDeals';
+import { FlightSortBar, SortOption, sortFlights } from './FlightSortBar';
 
 interface FlightResultsProps {
   flights: FlightWithDeal[];
@@ -26,6 +27,7 @@ export const FlightResults = ({
 }: FlightResultsProps) => {
   const [airlineFilter, setAirlineFilter] = useState('');
   const [showFilter, setShowFilter] = useState(false);
+  const [sort, setSort] = useState<SortOption>('best');
 
   // Extract unique airline names from all flights
   const allAirlines = useMemo(() => {
@@ -42,14 +44,17 @@ export const FlightResults = ({
 
   // Filter flights by airline name
   const filteredFlights = useMemo(() => {
-    if (!airlineFilter.trim()) return flights;
-    const q = airlineFilter.toLowerCase();
-    return flights.filter(f =>
-      f.legs.some(leg =>
-        leg.carriers.marketing.some(c => c.name.toLowerCase().includes(q))
-      )
-    );
-  }, [flights, airlineFilter]);
+    let result = flights;
+    if (airlineFilter.trim()) {
+      const q = airlineFilter.toLowerCase();
+      result = result.filter(f =>
+        f.legs.some(leg =>
+          leg.carriers.marketing.some(c => c.name.toLowerCase().includes(q))
+        )
+      );
+    }
+    return sortFlights(result, sort);
+  }, [flights, airlineFilter, sort]);
 
   if (isLoading) {
     return (
@@ -127,7 +132,8 @@ export const FlightResults = ({
                 : `${flights.length} total results`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <FlightSortBar value={sort} onChange={setSort} />
           <Button
             variant="outline"
             size="sm"
