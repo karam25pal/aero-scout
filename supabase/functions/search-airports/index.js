@@ -46,7 +46,7 @@ const AIRPORTS = [
   { iata: 'TPA', name: 'Tampa International', city: 'Tampa', country: 'United States' },
   { iata: 'CDG', name: 'Charles de Gaulle Airport', city: 'Paris', country: 'France' },
   { iata: 'ORY', name: 'Orly Airport', city: 'Paris', country: 'France' },
-  { iata: 'NCE', name: 'Nice Côte d\'Azur Airport', city: 'Nice', country: 'France' },
+  { iata: 'NCE', name: "Nice Côte d'Azur Airport", city: 'Nice', country: 'France' },
   { iata: 'LYS', name: 'Lyon-Saint Exupéry Airport', city: 'Lyon', country: 'France' },
   { iata: 'MRS', name: 'Marseille Provence Airport', city: 'Marseille', country: 'France' },
   { iata: 'FRA', name: 'Frankfurt Airport', city: 'Frankfurt', country: 'Germany' },
